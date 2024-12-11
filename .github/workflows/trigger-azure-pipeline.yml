@@ -22,34 +22,40 @@ jobs:
           ORG="sergiovelderrain"
           PROJECT="sergiovelderrain"
           PIPELINE_ID="1"
-          API_VERSION="6.0-preview.1"
+          # You can try a more recent api-version, for example "7.1-preview.1".
+          API_VERSION="7.1-preview.1"
 
-          # Ensure PAT is not empty
           if [ -z "$PAT" ]; then
             echo "AZURE_DEVOPS_PAT is not set or empty!"
             exit 1
           fi
 
-          # Base64 encode credentials
+          # Base64 encode the PAT for Basic auth
           AUTH=$(echo -n ":$PAT" | base64)
 
-          # Use the PR's head ref for the pipeline branch
+          # Extract the PR branch name from the event.
+          # For a forked PR, this is something like: <branch_name>
+          # We'll need to prepend refs/heads/ for Azure DevOps.
           PR_HEAD_REF="${{ github.event.pull_request.head.ref }}"
-          JSON_BODY='{
-            "resources": {
-              "repositories": {
-                "self": {
-                  "refName": "refs/heads/'"${PR_HEAD_REF}"'"
+
+          # Construct the JSON payload with properly escaped quotes.
+          # Using double-quotes around the entire JSON and escaping internal quotes is safest.
+          JSON_BODY="{
+            \"resources\": {
+              \"repositories\": {
+                \"self\": {
+                  \"refName\": \"refs/heads/${PR_HEAD_REF}\"
                 }
               }
             }
-          }'
+          }"
 
           echo "Triggering Azure DevOps pipeline with the following JSON:"
           echo "$JSON_BODY"
 
-          # Use --http1.1 to avoid HTTP/2 related issues, remove -s for verbosity
-          curl --http1.1 -v -X POST \
+          # Use --http1.1 and -v for verbose output to help debug issues if any.
+          # Add --fail to ensure the command fails if we get a non-2xx response.
+          curl --http1.1 --fail -v -X POST \
                -H "Authorization: Basic $AUTH" \
                -H "Content-Type: application/json" \
                -d "$JSON_BODY" \
