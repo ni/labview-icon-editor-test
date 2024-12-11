@@ -1,15 +1,9 @@
-trigger:
-  branches:
-    include:
-      - develop  # or whatever branch you'd like to build on push
-
-pr:
-  branches:
-    include:
-      - develop  # the branch into which PRs are made
-  forks:
-    enabled: true
-    allowSecrets: false
+# Removed trigger so pipeline runs only when requested via API
+# trigger:
+#   branches:
+#     include:
+#       - main
+#       - develop
 
 name: $(Build.BuildID)
 
