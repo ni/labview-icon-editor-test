@@ -21,7 +21,7 @@ jobs:
           PAT="${{ secrets.AZURE_DEVOPS_PAT }}"
           ORG="sergiovelderrain"
           PROJECT="sergiovelderrain"
-          PIPELINE_ID="1"
+          PIPELINE_ID="3"
           # You can try a more recent api-version, for example "7.1-preview.1".
           API_VERSION="7.1-preview.1"
 
