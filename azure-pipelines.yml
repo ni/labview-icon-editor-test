@@ -1,12 +1,12 @@
 trigger:
   branches:
     include:
-      - develop  # or whatever branch you'd like to build on push
+      - develop
 
 pr:
   branches:
     include:
-      - develop  # the branch into which PRs are made
+      - develop
   forks:
     enabled: true
     allowSecrets: false
