@@ -16,6 +16,7 @@ jobs:
           echo "ok=true" >> $GITHUB_OUTPUT
 
       - name: Trigger Azure DevOps Pipeline
+        id: trigger_pipeline
         if: steps.check.outputs.ok == 'true'
         run: |
           PAT="${{ secrets.AZURE_DEVOPS_PAT }}"
@@ -48,9 +49,63 @@ jobs:
           echo "Triggering Azure DevOps pipeline with the following JSON:"
           echo "$JSON_BODY"
 
-          # Use --http1.1 to avoid HTTP/2 related issues, remove -s for verbosity
-          curl --http1.1 -v -X POST \
+          # Trigger the pipeline and capture the response
+          RESPONSE=$(curl --http1.1 -s -X POST \
                -H "Authorization: Basic $AUTH" \
                -H "Content-Type: application/json" \
                -d "$JSON_BODY" \
-               "https://dev.azure.com/$ORG/$PROJECT/_apis/pipelines/$PIPELINE_ID/runs?api-version=$API_VERSION"
+               "https://dev.azure.com/$ORG/$PROJECT/_apis/pipelines/$PIPELINE_ID/runs?api-version=$API_VERSION")
+
+          echo "Pipeline trigger response:"
+          echo "$RESPONSE"
+
+          # Extract the pipeline run ID from the response using jq
+          RUN_ID=$(echo "$RESPONSE" | jq -r '.id')
+          if [ "$RUN_ID" == "null" ] || [ -z "$RUN_ID" ]; then
+            echo "Could not extract run ID from the response."
+            exit 1
+          fi
+          echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+
+      - name: Wait for Azure DevOps Pipeline to complete
+        if: steps.check.outputs.ok == 'true'
+        run: |
+          PAT="${{ secrets.AZURE_DEVOPS_PAT }}"
+          ORG="sergiovelderrain"
+          PROJECT="sergiovelderrain"
+          API_VERSION="6.0-preview.1"
+          RUN_ID=${{ steps.trigger_pipeline.outputs.run_id }}
+
+          # Base64 encode credentials
+          AUTH=$(echo -n ":$PAT" | base64)
+
+          echo "Checking status for RUN_ID: $RUN_ID"
+
+          # Poll every 15 seconds for up to 30 minutes (120 polls)
+          for i in {1..120}; do
+            STATUS_RESPONSE=$(curl --http1.1 -s \
+              -H "Authorization: Basic $AUTH" \
+              "https://dev.azure.com/$ORG/$PROJECT/_apis/pipelines/runs/$RUN_ID?api-version=$API_VERSION")
+
+            STATE=$(echo "$STATUS_RESPONSE" | jq -r '.state')
+            RESULT=$(echo "$STATUS_RESPONSE" | jq -r '.result')
+
+            echo "Pipeline state: $STATE"
+            echo "Pipeline result: $RESULT"
+
+            if [ "$STATE" = "completed" ]; then
+              if [ "$RESULT" = "succeeded" ]; then
+                echo "Pipeline completed successfully."
+                exit 0
+              else
+                echo "Pipeline failed or did not succeed. Result: $RESULT"
+                exit 1
+              fi
+            fi
+
+            echo "Pipeline not completed yet. Waiting..."
+            sleep 15
+          done
+
+          echo "Pipeline did not complete within the expected time."
+          exit 1
