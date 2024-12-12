@@ -23,7 +23,7 @@ jobs:
           PROJECT="sergiovelderrain"
           PIPELINE_ID="3"
           # You can try a more recent api-version, for example "7.1-preview.1".
-          API_VERSION="7.1-preview.1"
+          API_VERSION="6.0-preview.1"
 
           if [ -z "$PAT" ]; then
             echo "AZURE_DEVOPS_PAT is not set or empty!"
