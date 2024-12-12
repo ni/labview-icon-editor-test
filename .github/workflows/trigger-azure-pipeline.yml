@@ -7,7 +7,7 @@ on:
 jobs:
   trigger-azure-pipeline:
     runs-on: ubuntu-latest
-    if: contains(github.event.pull_request.base.ref, 'develop')
+    if: contains(github.event.pull_request.base.ref, 'main')
     steps:
       - name: Check if authorized to run tests
         id: check
@@ -22,7 +22,6 @@ jobs:
           ORG="sergiovelderrain"
           PROJECT="sergiovelderrain"
           PIPELINE_ID="3"
-          # You can try a more recent api-version, for example "7.1-preview.1".
           API_VERSION="6.0-preview.1"
 
           if [ -z "$PAT" ]; then
