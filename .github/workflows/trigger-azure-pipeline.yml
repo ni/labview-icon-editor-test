@@ -16,6 +16,7 @@ jobs:
           echo "ok=true" >> $GITHUB_OUTPUT
 
       - name: Trigger Azure DevOps Pipeline
+        id: trigger_pipeline
         if: steps.check.outputs.ok == 'true'
         run: |
           PAT="${{ secrets.AZURE_DEVOPS_PAT }}"
@@ -24,38 +25,87 @@ jobs:
           PIPELINE_ID="3"
           API_VERSION="6.0-preview.1"
 
+          # Ensure PAT is not empty
           if [ -z "$PAT" ]; then
             echo "AZURE_DEVOPS_PAT is not set or empty!"
             exit 1
           fi
 
-          # Base64 encode the PAT for Basic auth
+          # Base64 encode credentials
           AUTH=$(echo -n ":$PAT" | base64)
 
-          # Extract the PR branch name from the event.
-          # For a forked PR, this is something like: <branch_name>
-          # We'll need to prepend refs/heads/ for Azure DevOps.
+          # Use the PR's head ref for the pipeline branch
           PR_HEAD_REF="${{ github.event.pull_request.head.ref }}"
-
-          # Construct the JSON payload with properly escaped quotes.
-          # Using double-quotes around the entire JSON and escaping internal quotes is safest.
-          JSON_BODY="{
-            \"resources\": {
-              \"repositories\": {
-                \"self\": {
-                  \"refName\": \"refs/heads/${PR_HEAD_REF}\"
+          JSON_BODY='{
+            "resources": {
+              "repositories": {
+                "self": {
+                  "refName": "refs/heads/'"${PR_HEAD_REF}"'"
                 }
               }
             }
-          }"
+          }'
 
           echo "Triggering Azure DevOps pipeline with the following JSON:"
           echo "$JSON_BODY"
 
-          # Use --http1.1 and -v for verbose output to help debug issues if any.
-          # Add --fail to ensure the command fails if we get a non-2xx response.
-          curl --http1.1 --fail -v -X POST \
+          # Trigger the pipeline and capture the response
+          RESPONSE=$(curl --http1.1 -s -X POST \
                -H "Authorization: Basic $AUTH" \
                -H "Content-Type: application/json" \
                -d "$JSON_BODY" \
-               "https://dev.azure.com/$ORG/$PROJECT/_apis/pipelines/$PIPELINE_ID/runs?api-version=$API_VERSION"
+               "https://dev.azure.com/$ORG/$PROJECT/_apis/pipelines/$PIPELINE_ID/runs?api-version=$API_VERSION")
+
+          echo "Pipeline trigger response:"
+          echo "$RESPONSE"
+
+          # Extract the pipeline run ID from the response using jq
+          RUN_ID=$(echo "$RESPONSE" | jq -r '.id')
+          if [ "$RUN_ID" == "null" ] || [ -z "$RUN_ID" ]; then
+            echo "Could not extract run ID from the response."
+            exit 1
+          fi
+          echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+
+      - name: Wait for Azure DevOps Pipeline to complete
+        if: steps.check.outputs.ok == 'true'
+        run: |
+          PAT="${{ secrets.AZURE_DEVOPS_PAT }}"
+          ORG="sergiovelderrain"
+          PROJECT="sergiovelderrain"
+          API_VERSION="6.0-preview.1"
+          RUN_ID=${{ steps.trigger_pipeline.outputs.run_id }}
+
+          # Base64 encode credentials
+          AUTH=$(echo -n ":$PAT" | base64)
+
+          echo "Checking status for RUN_ID: $RUN_ID"
+
+          # Poll every 15 seconds for up to 30 minutes (120 polls)
+          for i in {1..120}; do
+            STATUS_RESPONSE=$(curl --http1.1 -s \
+              -H "Authorization: Basic $AUTH" \
+              "https://dev.azure.com/$ORG/$PROJECT/_apis/pipelines/runs/$RUN_ID?api-version=$API_VERSION")
+
+            STATE=$(echo "$STATUS_RESPONSE" | jq -r '.state')
+            RESULT=$(echo "$STATUS_RESPONSE" | jq -r '.result')
+
+            echo "Pipeline state: $STATE"
+            echo "Pipeline result: $RESULT"
+
+            if [ "$STATE" = "completed" ]; then
+              if [ "$RESULT" = "succeeded" ]; then
+                echo "Pipeline completed successfully."
+                exit 0
+              else
+                echo "Pipeline failed or did not succeed. Result: $RESULT"
+                exit 1
+              fi
+            fi
+
+            echo "Pipeline not completed yet. Waiting..."
+            sleep 15
+          done
+
+          echo "Pipeline did not complete within the expected time."
+          exit 1
