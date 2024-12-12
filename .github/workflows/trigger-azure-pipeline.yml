@@ -23,7 +23,7 @@ jobs:
           ORG="sergiovelderrain"
           PROJECT="sergiovelderrain"
           PIPELINE_ID="3"
-          API_VERSION="6.0-preview.1"
+          API_VERSION="7.0"
 
           # Ensure PAT is not empty
           if [ -z "$PAT" ]; then
@@ -31,8 +31,8 @@ jobs:
             exit 1
           fi
 
-          # Base64 encode credentials
-          AUTH=$(echo -n ":$PAT" | base64)
+          # Base64 encode credentials and remove newline
+          AUTH=$(echo -n ":$PAT" | base64 | tr -d '\n')
 
           # Use the PR's head ref for the pipeline branch
           PR_HEAD_REF="${{ github.event.pull_request.head.ref }}"
@@ -50,7 +50,7 @@ jobs:
           echo "$JSON_BODY"
 
           # Trigger the pipeline and capture the response
-          RESPONSE=$(curl --http1.1 -s -X POST \
+          RESPONSE=$(curl --fail --http1.1 -s -X POST \
                -H "Authorization: Basic $AUTH" \
                -H "Content-Type: application/json" \
                -d "$JSON_BODY" \
@@ -58,6 +58,12 @@ jobs:
 
           echo "Pipeline trigger response:"
           echo "$RESPONSE"
+
+          # Verify response is JSON before parsing
+          if ! echo "$RESPONSE" | grep -q '^{'; then
+            echo "The response is not in JSON format. Cannot parse with jq."
+            exit 1
+          fi
 
           # Extract the pipeline run ID from the response using jq
           RUN_ID=$(echo "$RESPONSE" | jq -r '.id')
@@ -73,11 +79,11 @@ jobs:
           PAT="${{ secrets.AZURE_DEVOPS_PAT }}"
           ORG="sergiovelderrain"
           PROJECT="sergiovelderrain"
-          API_VERSION="6.0-preview.1"
+          API_VERSION="7.0"
           RUN_ID=${{ steps.trigger_pipeline.outputs.run_id }}
 
-          # Base64 encode credentials
-          AUTH=$(echo -n ":$PAT" | base64)
+          # Base64 encode credentials and remove newline
+          AUTH=$(echo -n ":$PAT" | base64 | tr -d '\n')
 
           echo "Checking status for RUN_ID: $RUN_ID"
 
