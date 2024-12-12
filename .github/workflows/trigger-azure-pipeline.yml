@@ -21,7 +21,7 @@ jobs:
           PAT="${{ secrets.AZURE_DEVOPS_PAT }}"
           ORG="sergiovelderrain"
           PROJECT="sergiovelderrain"
-          PIPELINE_ID="1"
+          PIPELINE_ID="3"
           API_VERSION="6.0-preview.1"
 
           # Ensure PAT is not empty
