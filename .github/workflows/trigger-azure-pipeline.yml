@@ -3,11 +3,12 @@ name: PR Triggered Tests
 on:
   pull_request_target:
     types: [opened, synchronize, reopened]
+  workflow_dispatch:
 
 jobs:
   trigger-azure-pipeline:
     runs-on: ubuntu-latest
-    if: contains(github.event.pull_request.base.ref, 'develop')
+    if: contains(github.event.pull_request.base.ref, 'develop') || github.event_name == 'workflow_dispatch'
     steps:
       - name: Check if authorized to run tests
         id: check
@@ -16,47 +17,65 @@ jobs:
           echo "ok=true" >> $GITHUB_OUTPUT
 
       - name: Trigger Azure DevOps Pipeline
+        id: trigger_pipeline
         if: steps.check.outputs.ok == 'true'
         run: |
           PAT="${{ secrets.AZURE_DEVOPS_PAT }}"
           ORG="sergiovelderrain"
           PROJECT="sergiovelderrain"
           PIPELINE_ID="3"
-          # You can try a more recent api-version, for example "7.1-preview.1".
-          API_VERSION="7.1-preview.1"
+          API_VERSION="7.0"
 
+          # Ensure PAT is not empty
           if [ -z "$PAT" ]; then
             echo "AZURE_DEVOPS_PAT is not set or empty!"
             exit 1
           fi
 
-          # Base64 encode the PAT for Basic auth
-          AUTH=$(echo -n ":$PAT" | base64)
+          # Base64 encode credentials and remove newline
+          AUTH=$(echo -n ":$PAT" | base64 | tr -d '\n')
 
-          # Extract the PR branch name from the event.
-          # For a forked PR, this is something like: <branch_name>
-          # We'll need to prepend refs/heads/ for Azure DevOps.
-          PR_HEAD_REF="${{ github.event.pull_request.head.ref }}"
+          # Use the PR's head ref for the pipeline branch if it's a PR event
+          # If manually triggered (workflow_dispatch), default to a known branch like 'develop'
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            PR_HEAD_REF="main"
+          else
+            PR_HEAD_REF="${{ github.event.pull_request.head.ref }}"
+          fi
 
-          # Construct the JSON payload with properly escaped quotes.
-          # Using double-quotes around the entire JSON and escaping internal quotes is safest.
-          JSON_BODY="{
-            \"resources\": {
-              \"repositories\": {
-                \"self\": {
-                  \"refName\": \"refs/heads/${PR_HEAD_REF}\"
+          JSON_BODY='{
+            "resources": {
+              "repositories": {
+                "self": {
+                  "refName": "refs/heads/'"${PR_HEAD_REF}"'"
                 }
               }
             }
-          }"
+          }'
 
           echo "Triggering Azure DevOps pipeline with the following JSON:"
           echo "$JSON_BODY"
 
-          # Use --http1.1 and -v for verbose output to help debug issues if any.
-          # Add --fail to ensure the command fails if we get a non-2xx response.
-          curl --http1.1 --fail -v -X POST \
+          # Trigger the pipeline and capture the response
+          RESPONSE=$(curl --fail --http1.1 -s -X POST \
                -H "Authorization: Basic $AUTH" \
                -H "Content-Type: application/json" \
                -d "$JSON_BODY" \
-               "https://dev.azure.com/$ORG/$PROJECT/_apis/pipelines/$PIPELINE_ID/runs?api-version=$API_VERSION"
+               "https://dev.azure.com/$ORG/$PROJECT/_apis/pipelines/$PIPELINE_ID/runs?api-version=$API_VERSION")
+
+          echo "Pipeline trigger response:"
+          echo "$RESPONSE"
+
+          # Verify response is JSON before parsing
+          if ! echo "$RESPONSE" | grep -q '^{'; then
+            echo "The response is not in JSON format. Cannot parse with jq."
+            exit 1
+          fi
+
+          # Extract the pipeline run ID from the response using jq
+          RUN_ID=$(echo "$RESPONSE" | jq -r '.id')
+          if [ "$RUN_ID" == "null" ] || [ -z "$RUN_ID" ]; then
+            echo "Could not extract run ID from the response."
+            exit 1
+          fi
+          echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT

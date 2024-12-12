@@ -1,10 +1,5 @@
-# Removed trigger so pipeline runs only when requested via API
-# trigger:
-#   branches:
-#     include:
-#       - main
-#       - develop
-
+trigger: none
+pr: none
 name: $(Build.BuildID)
 
 pool:
