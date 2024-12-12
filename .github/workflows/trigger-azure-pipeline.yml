@@ -38,7 +38,7 @@ jobs:
           # Use the PR's head ref for the pipeline branch if it's a PR event
           # If manually triggered (workflow_dispatch), default to a known branch like 'develop'
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            PR_HEAD_REF="develop"
+            PR_HEAD_REF="main"
           else
             PR_HEAD_REF="${{ github.event.pull_request.head.ref }}"
           fi
