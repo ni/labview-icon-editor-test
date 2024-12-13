@@ -5,6 +5,9 @@ on:
     types: [opened, synchronize, reopened]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   trigger-azure-pipeline:
     runs-on: ubuntu-latest
@@ -59,23 +62,24 @@ jobs:
           echo "Pipeline trigger response:"
           echo "$RESPONSE"
 
-          # Store the entire response as an output for the next step
-          # Make sure it's JSON to parse it later
           if ! echo "$RESPONSE" | grep -q '^{'; then
             echo "The response is not JSON, cannot parse with jq."
+            echo "$RESPONSE"
             exit 1
           fi
 
-          echo "response=$RESPONSE" >> $GITHUB_OUTPUT
+          echo "response<<EOF" >> $GITHUB_OUTPUT
+          echo "$RESPONSE" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Extract run ID
         id: extract_run_id
         if: steps.check.outputs.ok == 'true'
         run: |
-          # Parse the run_id out of the response from the previous step
           RUN_ID=$(echo "${{ steps.trigger_pipeline.outputs.response }}" | jq -r '.id')
           if [ "$RUN_ID" == "null" ] || [ -z "$RUN_ID" ]; then
             echo "Could not extract run ID from the response."
+            echo "Response was: ${{ steps.trigger_pipeline.outputs.response }}"
             exit 1
           fi
           echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
@@ -93,14 +97,13 @@ jobs:
 
           echo "Checking status for RUN_ID: $RUN_ID"
 
-          # Poll every 15s up to 30m for completion
           for i in {1..120}; do
             STATUS_RESPONSE=$(curl --fail --http1.1 -s \
               -H "Authorization: Basic $AUTH" \
               "https://dev.azure.com/$ORG/$PROJECT/_apis/pipelines/runs/$RUN_ID?api-version=$API_VERSION" || true)
 
             if ! echo "$STATUS_RESPONSE" | grep -q '^{'; then
-              echo "The response is not JSON, raw response:"
+              echo "The response is not JSON. Here is the raw response:"
               echo "$STATUS_RESPONSE"
               exit 1
             fi
