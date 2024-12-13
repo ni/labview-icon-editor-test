@@ -21,13 +21,11 @@ jobs:
         if: steps.check.outputs.ok == 'true'
         uses: Azure/pipelines@v1.2
         with:
-          azure_devops_organization_url: 'https://dev.azure.com/sergiovelderrain'
-          project_name: 'sergiovelderrain'
-          definition_id: '3'
-          parameters: |
+          azure-devops-project-url: 'https://dev.azure.com/sergiovelderrain/sergiovelderrain'
+          azure-pipeline-name: 'ni.labview-icon-editor-test'
+          azure-pipeline-variables: |
             resources:
               repositories:
                 self:
                   refName: "refs/heads/${{ github.event_name == 'workflow_dispatch' && 'develop' || github.event.pull_request.head.ref }}"
-        env:
-          AZURE_DEVOPS_EXT_PAT: ${{ secrets.AZURE_DEVOPS_PAT }}
+          azure-devops-token: ${{ secrets.AZURE_DEVOPS_PAT }}
