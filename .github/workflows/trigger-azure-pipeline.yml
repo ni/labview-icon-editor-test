@@ -5,80 +5,102 @@ on:
     types: [opened, synchronize, reopened]
   workflow_dispatch:
 
-permissions:
-  contents: read
-  checks: write  # Required to create/update check runs
-
 jobs:
-  trigger-and-check-pipeline:
+  trigger-azure-pipeline:
     runs-on: ubuntu-latest
     steps:
       - name: Check if authorized to run tests
         id: check
         run: |
-          # Add conditions if needed. For now, always allow.
           echo "ok=true" >> $GITHUB_OUTPUT
 
-      - name: Create GitHub Check Run (Pipeline Status)
-        if: steps.check.outputs.ok == 'true'
-        id: create_check
-        uses: actions/github-script@v1
-        with:
-          script: |
-            const { data } = await github.checks.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              name: "Azure DevOps Pipeline",
-              head_sha: context.payload.pull_request ? context.payload.pull_request.head.sha : context.sha,
-              status: "in_progress",
-              started_at: new Date().toISOString()
-            });
-            core.setOutput("check_run_id", data.id);
-
       - name: Trigger Azure DevOps Pipeline
-        if: steps.check.outputs.ok == 'true'
-        uses: Azure/pipelines@v1
-        with:
-          azure-devops-project-url: 'https://dev.azure.com/sergiovelderrain/sergiovelderrain'
-          azure-pipeline-name: 'ni.labview-icon-editor-test'
-          azure-devops-token: ${{ secrets.AZURE_DEVOPS_PAT }}
         id: trigger_pipeline
-
-      - name: Poll Azure DevOps Pipeline
         if: steps.check.outputs.ok == 'true'
         run: |
-          PAT="${{ secrets.AZURE_DEVOPS_TOKEN }}"
+          PAT="${{ secrets.AZURE_DEVOPS_PAT }}"
           ORG="sergiovelderrain"
           PROJECT="sergiovelderrain"
+          PIPELINE_ID="3"
           API_VERSION="7.0"
-          # The `Azure/pipelines` action does not currently output a run ID directly.
-          # We must retrieve the run ID from the triggered pipeline response if available.
-          # If no direct output is provided, consider adding a step in Azure DevOps pipeline
-          # that sets a variable or check if the action returns a pipeline run URL/ID.
-          
-          # Placeholder: If the action does not provide a run ID, you'd need to modify
-          # the pipeline or method of triggering to get the run ID. For demonstration,
-          # assume the run ID is obtained from an environment variable or known location.
-          # Replace this with actual logic to retrieve the run ID.
-          
-          RUN_ID_FILE="pipeline_run_id.txt"
-          if [ ! -f "$RUN_ID_FILE" ]; then
-            echo "Could not find pipeline run ID file. Modify this step to retrieve the run ID from Azure DevOps."
+
+          if [ -z "$PAT" ]; then
+            echo "AZURE_DEVOPS_PAT is not set or empty!"
             exit 1
           fi
-          
-          RUN_ID=$(cat $RUN_ID_FILE)
 
           AUTH=$(echo -n ":$PAT" | base64 | tr -d '\n')
 
-          # Poll every 15 seconds for up to 30 minutes (120 polls)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            PR_HEAD_REF="develop"
+          else
+            PR_HEAD_REF="${{ github.event.pull_request.head.ref }}"
+          fi
+
+          JSON_BODY='{
+            "resources": {
+              "repositories": {
+                "self": {
+                  "refName": "refs/heads/'"${PR_HEAD_REF}"'"
+                }
+              }
+            }
+          }'
+
+          echo "Triggering Azure DevOps pipeline with JSON:"
+          echo "$JSON_BODY"
+
+          RESPONSE=$(curl --fail --http1.1 -s -X POST \
+            -H "Authorization: Basic $AUTH" \
+            -H "Content-Type: application/json" \
+            -d "$JSON_BODY" \
+            "https://dev.azure.com/$ORG/$PROJECT/_apis/pipelines/$PIPELINE_ID/runs?api-version=$API_VERSION")
+
+          echo "Pipeline trigger response:"
+          echo "$RESPONSE"
+
+          # Store the entire response as an output for the next step
+          # Make sure it's JSON to parse it later
+          if ! echo "$RESPONSE" | grep -q '^{'; then
+            echo "The response is not JSON, cannot parse with jq."
+            exit 1
+          fi
+
+          echo "response=$RESPONSE" >> $GITHUB_OUTPUT
+
+      - name: Extract run ID
+        id: extract_run_id
+        if: steps.check.outputs.ok == 'true'
+        run: |
+          # Parse the run_id out of the response from the previous step
+          RUN_ID=$(echo "${{ steps.trigger_pipeline.outputs.response }}" | jq -r '.id')
+          if [ "$RUN_ID" == "null" ] || [ -z "$RUN_ID" ]; then
+            echo "Could not extract run ID from the response."
+            exit 1
+          fi
+          echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+
+      - name: Wait for Azure DevOps Pipeline to complete
+        if: steps.check.outputs.ok == 'true'
+        run: |
+          PAT="${{ secrets.AZURE_DEVOPS_PAT }}"
+          ORG="sergiovelderrain"
+          PROJECT="sergiovelderrain"
+          API_VERSION="7.0"
+          RUN_ID=${{ steps.extract_run_id.outputs.run_id }}
+
+          AUTH=$(echo -n ":$PAT" | base64 | tr -d '\n')
+
+          echo "Checking status for RUN_ID: $RUN_ID"
+
+          # Poll every 15s up to 30m for completion
           for i in {1..120}; do
             STATUS_RESPONSE=$(curl --fail --http1.1 -s \
               -H "Authorization: Basic $AUTH" \
               "https://dev.azure.com/$ORG/$PROJECT/_apis/pipelines/runs/$RUN_ID?api-version=$API_VERSION" || true)
 
             if ! echo "$STATUS_RESPONSE" | grep -q '^{'; then
-              echo "The response is not JSON. Here is the raw response:"
+              echo "The response is not JSON, raw response:"
               echo "$STATUS_RESPONSE"
               exit 1
             fi
@@ -90,8 +112,13 @@ jobs:
             echo "Pipeline result: $RESULT"
 
             if [ "$STATE" = "completed" ]; then
-              echo "pipeline_result=$RESULT" >> $GITHUB_OUTPUT
-              exit 0
+              if [ "$RESULT" = "succeeded" ]; then
+                echo "Pipeline completed successfully."
+                exit 0
+              else
+                echo "Pipeline failed or did not succeed. Result: $RESULT"
+                exit 1
+              fi
             fi
 
             echo "Pipeline not completed yet. Waiting..."
@@ -100,29 +127,3 @@ jobs:
 
           echo "Pipeline did not complete within the expected time."
           exit 1
-        id: poll_pipeline
-
-      - name: Update GitHub Check Run with Pipeline Status
-        if: steps.check.outputs.ok == 'true'
-        uses: actions/github-script@v1
-        with:
-          script: |
-            const check_run_id = ${{ steps.create_check.outputs.check_run_id }};
-            const pipelineResult = ${{ steps.poll_pipeline.outputs.pipeline_result }};
-            let conclusion = 'failure';
-            if (pipelineResult === 'succeeded') {
-              conclusion = 'success';
-            }
-
-            await github.checks.update({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              check_run_id,
-              completed_at: new Date().toISOString(),
-              status: 'completed',
-              conclusion: conclusion,
-              output: {
-                title: 'Azure Pipeline Result',
-                summary: `The Azure DevOps pipeline finished with status: ${pipelineResult}`
-              }
-            });
