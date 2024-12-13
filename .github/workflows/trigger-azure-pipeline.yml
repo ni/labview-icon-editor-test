@@ -18,56 +18,16 @@ jobs:
           echo "ok=true" >> $GITHUB_OUTPUT
 
       - name: Trigger Azure DevOps Pipeline
-        id: trigger_pipeline
         if: steps.check.outputs.ok == 'true'
-        run: |
-          PAT="${{ secrets.AZURE_DEVOPS_PAT }}"
-          ORG="sergiovelderrain"
-          PROJECT="sergiovelderrain"
-          PIPELINE_ID="3"
-          API_VERSION="7.0"
-
-          if [ -z "$PAT" ]; then
-            echo "AZURE_DEVOPS_PAT is not set or empty!"
-            exit 1
-          fi
-
-          AUTH=$(echo -n ":$PAT" | base64 | tr -d '\n')
-
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            PR_HEAD_REF="develop"
-          else
-            PR_HEAD_REF="${{ github.event.pull_request.head.ref }}"
-          fi
-
-          JSON_BODY='{
-            "resources": {
-              "repositories": {
-                "self": {
-                  "refName": "refs/heads/'"${PR_HEAD_REF}"'"
-                }
-              }
-            }
-          }'
-
-          echo "Triggering Azure DevOps pipeline with JSON:"
-          echo "$JSON_BODY"
-
-          RESPONSE=$(curl --fail --http1.1 -s -X POST \
-            -H "Authorization: Basic $AUTH" \
-            -H "Content-Type: application/json" \
-            -d "$JSON_BODY" \
-            "https://dev.azure.com/$ORG/$PROJECT/_apis/pipelines/$PIPELINE_ID/runs?api-version=$API_VERSION")
-
-          echo "Pipeline trigger response:"
-          echo "$RESPONSE"
-
-          if ! echo "$RESPONSE" | grep -q '^{'; then
-            echo "The response is not JSON, cannot parse with jq."
-            echo "$RESPONSE"
-            exit 1
-          fi
-
-          echo "response<<EOF" >> $GITHUB_OUTPUT
-          echo "$RESPONSE" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+        uses: Azure/pipelines@v1.2
+        with:
+          azure_devops_organization_url: 'https://dev.azure.com/sergiovelderrain'
+          project_name: 'sergiovelderrain'
+          definition_id: '3'
+          parameters: |
+            resources:
+              repositories:
+                self:
+                  refName: "refs/heads/${{ github.event_name == 'workflow_dispatch' && 'develop' || github.event.pull_request.head.ref }}"
+        env:
+          AZURE_DEVOPS_EXT_PAT: ${{ secrets.AZURE_DEVOPS_PAT }}
