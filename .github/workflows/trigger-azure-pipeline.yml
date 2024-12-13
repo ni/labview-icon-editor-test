@@ -24,5 +24,4 @@ jobs:
         with:
           azure-devops-project-url: 'https://dev.azure.com/sergiovelderrain/sergiovelderrain'
           azure-pipeline-name: 'ni.labview-icon-editor-test'
-          azure-devops-token: ${{ secrets.AZURE_DEVOPS_TOKEN }}
-          azure-pipeline-variables: '{"variable1": "value1", "variable2": "value2"}'
+          azure-devops-token: ${{ secrets.AZURE_DEVOPS_PAT }}
