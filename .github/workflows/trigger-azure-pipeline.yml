@@ -9,11 +9,6 @@ jobs:
   trigger-azure-pipeline:
     runs-on: ubuntu-latest
     steps:
-      - name: Check if authorized to run tests
-        id: check
-        run: |
-          echo "ok=true" >> $GITHUB_OUTPUT
-
       - name: Trigger Azure DevOps Pipeline
         if: steps.check.outputs.ok == 'true'
         uses: Azure/pipelines@v1.2
