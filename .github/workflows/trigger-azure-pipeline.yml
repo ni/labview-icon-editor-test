@@ -23,9 +23,4 @@ jobs:
         with:
           azure-devops-project-url: 'https://dev.azure.com/sergiovelderrain/sergiovelderrain'
           azure-pipeline-name: 'ni.labview-icon-editor-test'
-          azure-pipeline-variables: |
-            resources:
-              repositories:
-                self:
-                  refName: "refs/heads/${{ github.event_name == 'workflow_dispatch' && 'develop' || github.event.pull_request.head.ref }}"
           azure-devops-token: ${{ secrets.AZURE_DEVOPS_PAT }}
