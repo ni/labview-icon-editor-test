@@ -125,7 +125,7 @@ jobs:
           STATUS_URL="https://dev.azure.com/${ORGANIZATION}/${PROJECT_NAME}/_apis/build/builds/${BUILD_ID}?api-version=6.0"
           TIMELINE_URL="https://dev.azure.com/${ORGANIZATION}/${PROJECT_NAME}/_apis/build/builds/${BUILD_ID}/timeline?api-version=6.0"
 
-          MAX_ATTEMPTS=30
+          MAX_ATTEMPTS=1000
           SLEEP_SECONDS=10
           ATTEMPT=1
 
