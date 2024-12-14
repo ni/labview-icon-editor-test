@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 env:
-  DEBUG_MODE: "true" # Set to "true" for verbose debugging
+  DEBUG_MODE: "true" # Set to "false" to reduce verbosity
 
 jobs:
   trigger-azure-pipeline:
@@ -33,6 +33,7 @@ jobs:
           AZURE_DEVOPS_PAT: ${{ secrets.AZURE_DEVOPS_PAT }}
         run: |
           set -euo pipefail
+
           if [ "$DEBUG_MODE" = "true" ]; then
             echo "::debug::Debug mode enabled."
           fi
@@ -42,39 +43,56 @@ jobs:
             exit 1
           fi
 
-          # Use printf and base64 -w 0 to avoid newlines in the encoded value.
           AUTH_HEADER=$(printf ":%s" "${AZURE_DEVOPS_PAT}" | base64 -w 0)
           API_URL="https://dev.azure.com/${ORGANIZATION}/${PROJECT_NAME}/_apis/build/builds?definitions=${PIPELINE_DEFINITION_ID}&\$top=1&api-version=6.0"
 
-          if [ "$DEBUG_MODE" = "true" ]; then
-            echo "::debug::Fetching latest build from $API_URL"
-          fi
+          MAX_ATTEMPTS=10
+          SLEEP_SECONDS=5
+          ATTEMPT=1
+          BUILD_ID=""
 
-          rm -f response.json || true
-          if ! wget --quiet --header="Authorization: Basic ${AUTH_HEADER}" -O response.json "$API_URL"; then
-            echo "Error: Failed to fetch build runs." >&2
-            exit 1
-          fi
-
-          if [ "$DEBUG_MODE" = "true" ]; then
-            echo "::debug::Full response:"
-            cat response.json | jq .
-          fi
-
-          BUILD_ID=$(jq -r '.value[0].id // empty' response.json)
-
-          if [ -z "$BUILD_ID" ]; then
-            echo "Error: No build ID found in response." >&2
+          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
             if [ "$DEBUG_MODE" = "true" ]; then
-              echo "::debug::Response:"
-              cat response.json
+              echo "::debug::Fetching latest build (Attempt $ATTEMPT/$MAX_ATTEMPTS) from $API_URL"
             fi
-            exit 1
-          fi
 
-          echo "BUILD_ID=$BUILD_ID" >> $GITHUB_ENV
-          if [ "$DEBUG_MODE" = "true" ]; then
-            echo "::debug::BUILD_ID=$BUILD_ID"
+            rm -f response.json || true
+            if ! wget --quiet --header="Authorization: Basic ${AUTH_HEADER}" -O response.json "$API_URL"; then
+              echo "Error: Failed to fetch build runs." >&2
+              exit 1
+            fi
+
+            if [ "$DEBUG_MODE" = "true" ]; then
+              echo "::debug::Full response:"
+              cat response.json | jq .
+            fi
+
+            # Extract the BUILD_ID if available
+            BUILD_ID=$(jq -r '.value[0].id // empty' response.json || true)
+
+            if [ -n "$BUILD_ID" ]; then
+              # We found a build run, break out of the loop
+              echo "BUILD_ID=$BUILD_ID" >> $GITHUB_ENV
+              if [ "$DEBUG_MODE" = "true" ]; then
+                echo "::debug::Found BUILD_ID=$BUILD_ID"
+              fi
+              break
+            else
+              if [ "$DEBUG_MODE" = "true" ]; then
+                echo "::debug::No build found yet. Response:"
+                cat response.json
+              fi
+              echo "No current build found. Waiting $SLEEP_SECONDS seconds before retry..."
+              sleep $SLEEP_SECONDS
+              ATTEMPT=$((ATTEMPT+1))
+            fi
+          done
+
+          # After retries, if still no BUILD_ID
+          if [ -z "$BUILD_ID" ]; then
+            echo "Error: No new build ID found after multiple attempts." >&2
+            cat response.json
+            exit 1
           fi
 
       - name: Poll pipeline status until completion
@@ -100,7 +118,6 @@ jobs:
             exit 1
           fi
 
-          # Use printf and base64 -w 0 again to avoid newlines.
           AUTH_HEADER=$(printf ":%s" "${AZURE_DEVOPS_PAT}" | base64 -w 0)
           STATUS_URL="https://dev.azure.com/${ORGANIZATION}/${PROJECT_NAME}/_apis/build/builds/${BUILD_ID}?api-version=6.0"
 
