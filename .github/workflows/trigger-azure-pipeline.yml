@@ -123,6 +123,7 @@ jobs:
 
           AUTH_HEADER=$(printf ":%s" "${AZURE_DEVOPS_PAT}" | base64 -w 0)
           STATUS_URL="https://dev.azure.com/${ORGANIZATION}/${PROJECT_NAME}/_apis/build/builds/${BUILD_ID}?api-version=6.0"
+          TIMELINE_URL="https://dev.azure.com/${ORGANIZATION}/${PROJECT_NAME}/_apis/build/builds/${BUILD_ID}/timeline?api-version=6.0"
 
           MAX_ATTEMPTS=30
           SLEEP_SECONDS=10
@@ -161,7 +162,20 @@ jobs:
               echo "::debug::Current Result: $RESULT"
             fi
 
+            # Fetch and report timeline for more detailed feedback
+            rm -f timeline.json || true
+            if ! wget --quiet --header="Authorization: Basic ${AUTH_HEADER}" -O timeline.json "$TIMELINE_URL"; then
+              echo "Error: Failed to fetch timeline." >&2
+              exit 1
+            fi
+
+            # Print detailed timeline feedback
+            echo "---- Pipeline Detailed Timeline ----"
+            cat timeline.json | jq '.records[] | {Type: .type, Name: .name, State: .state, Result: .result, StartTime: .startTime, FinishTime: .finishTime, Issues: .issues}'
+            echo "-----------------------------------"
+
             if [ "$STATUS" = "completed" ]; then
+              # If completed, check the final result
               break
             fi
 
