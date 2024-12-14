@@ -1,103 +1,3 @@
-name: PR Triggered Tests
-
-on:
-  pull_request_target:
-    types: [opened, synchronize, reopened]
-  workflow_dispatch:
-
-permissions:
-  contents: read
-
-env:
-  DEBUG_MODE: "false" # Set to "false" to reduce verbosity
-
-jobs:
-  trigger-azure-pipeline:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Trigger Azure DevOps Pipeline
-        id: trigger
-        uses: Azure/pipelines@v1.2
-        with:
-          azure-devops-project-url: 'https://dev.azure.com/sergiovelderrain/sergiovelderrain'
-          azure-pipeline-name: 'ni.labview-icon-editor-test'
-          azure-devops-token: ${{ secrets.AZURE_DEVOPS_PAT }}
-
-      - name: Wait for pipeline to start
-        run: |
-          echo "Waiting 2 minutes to allow the pipeline to start..."
-          sleep 120
-
-      - name: Find the in-progress pipeline run
-        id: find-run
-        env:
-          ORGANIZATION: sergiovelderrain
-          PROJECT_NAME: sergiovelderrain
-          PIPELINE_DEFINITION_ID: "3" # Replace with your pipeline definition ID
-          DEBUG_MODE: ${{ env.DEBUG_MODE }}
-          AZURE_DEVOPS_PAT: ${{ secrets.AZURE_DEVOPS_PAT }}
-        run: |
-          set -euo pipefail
-
-          if [ "$DEBUG_MODE" = "true" ]; then
-            echo "::debug::Debug mode enabled."
-          fi
-
-          if [ -z "${AZURE_DEVOPS_PAT}" ]; then
-            echo "Error: AZURE_DEVOPS_PAT not set." >&2
-            exit 1
-          fi
-
-          # Use printf and base64 -w 0 to avoid newlines in the encoded value.
-          AUTH_HEADER=$(printf ":%s" "${AZURE_DEVOPS_PAT}" | base64 -w 0)
-          # Use queryOrder=queueTimeDescending to ensure we get the newest runs first
-          API_URL="https://dev.azure.com/${ORGANIZATION}/${PROJECT_NAME}/_apis/build/builds?definitions=${PIPELINE_DEFINITION_ID}&\$top=10&queryOrder=queueTimeDescending&api-version=6.0"
-
-          MAX_ATTEMPTS=10
-          SLEEP_SECONDS=5
-          ATTEMPT=1
-          BUILD_ID=""
-
-          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
-            if [ "$DEBUG_MODE" = "true" ]; then
-              echo "::debug::Attempt $ATTEMPT/$MAX_ATTEMPTS to find in-progress build from $API_URL"
-            fi
-
-            rm -f response.json || true
-            if ! wget --quiet --header="Authorization: Basic ${AUTH_HEADER}" -O response.json "$API_URL"; then
-              echo "Error: Failed to fetch build runs." >&2
-              exit 1
-            fi
-
-            if [ "$DEBUG_MODE" = "true" ]; then
-              echo "::debug::Full response:"
-              cat response.json | jq .
-            fi
-
-            BUILD_ID=$(jq -r '.value[] | select(.status == "inProgress") | .id' response.json | head -n 1 || true)
-
-            if [ -n "$BUILD_ID" ]; then
-              echo "BUILD_ID=$BUILD_ID" >> $GITHUB_ENV
-              if [ "$DEBUG_MODE" = "true" ]; then
-                echo "::debug::Found in-progress BUILD_ID=$BUILD_ID"
-              fi
-              break
-            else
-              if [ "$DEBUG_MODE" = "true" ]; then
-                echo "::debug::No in-progress build found this attempt."
-              fi
-              echo "No in-progress build found yet. Waiting $SLEEP_SECONDS seconds before retry..."
-              sleep $SLEEP_SECONDS
-              ATTEMPT=$((ATTEMPT+1))
-            fi
-          done
-
-          if [ -z "$BUILD_ID" ]; then
-            echo "Error: No in-progress build found after multiple attempts." >&2
-            cat response.json
-            exit 1
-          fi
-
       - name: Poll pipeline status until completion
         id: poll-status
         env:
@@ -123,6 +23,7 @@ jobs:
 
           AUTH_HEADER=$(printf ":%s" "${AZURE_DEVOPS_PAT}" | base64 -w 0)
           STATUS_URL="https://dev.azure.com/${ORGANIZATION}/${PROJECT_NAME}/_apis/build/builds/${BUILD_ID}?api-version=6.0"
+          TIMELINE_URL="https://dev.azure.com/${ORGANIZATION}/${PROJECT_NAME}/_apis/build/builds/${BUILD_ID}/timeline?api-version=6.0"
 
           MAX_ATTEMPTS=30
           SLEEP_SECONDS=10
@@ -161,7 +62,20 @@ jobs:
               echo "::debug::Current Result: $RESULT"
             fi
 
+            # Fetch and report timeline for more detailed feedback
+            rm -f timeline.json || true
+            if ! wget --quiet --header="Authorization: Basic ${AUTH_HEADER}" -O timeline.json "$TIMELINE_URL"; then
+              echo "Error: Failed to fetch timeline." >&2
+              exit 1
+            fi
+
+            # Print detailed timeline feedback
+            echo "---- Pipeline Detailed Timeline ----"
+            cat timeline.json | jq '.records[] | {Type: .type, Name: .name, State: .state, Result: .result, StartTime: .startTime, FinishTime: .finishTime, Issues: .issues}'
+            echo "-----------------------------------"
+
             if [ "$STATUS" = "completed" ]; then
+              # If completed, check the final result
               break
             fi
 
