@@ -1,5 +1,3 @@
-Create a new .github/workflows/automerge.yml file:
-
 name: automerge
 on:
   pull_request:
