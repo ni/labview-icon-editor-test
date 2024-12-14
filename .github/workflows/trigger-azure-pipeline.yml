@@ -48,9 +48,10 @@ jobs:
             exit 1
           fi
 
+          # Use printf and base64 -w 0 to avoid newlines in the encoded value.
           AUTH_HEADER=$(printf ":%s" "${AZURE_DEVOPS_PAT}" | base64 -w 0)
-          # We'll fetch multiple runs to ensure we can find the one that's in progress
-          API_URL="https://dev.azure.com/${ORGANIZATION}/${PROJECT_NAME}/_apis/build/builds?definitions=${PIPELINE_DEFINITION_ID}&\$top=10&api-version=6.0"
+          # Use queryOrder=queueTimeDescending to ensure we get the newest runs first
+          API_URL="https://dev.azure.com/${ORGANIZATION}/${PROJECT_NAME}/_apis/build/builds?definitions=${PIPELINE_DEFINITION_ID}&\$top=10&queryOrder=queueTimeDescending&api-version=6.0"
 
           MAX_ATTEMPTS=10
           SLEEP_SECONDS=5
