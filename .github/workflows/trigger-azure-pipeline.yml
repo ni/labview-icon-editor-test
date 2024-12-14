@@ -28,7 +28,7 @@ jobs:
         env:
           ORGANIZATION: sergiovelderrain
           PROJECT_NAME: sergiovelderrain
-          PIPELINE_DEFINITION_ID: "123" # Replace with your pipeline definition ID
+          PIPELINE_DEFINITION_ID: "3" # Replace with your pipeline definition ID
           DEBUG_MODE: ${{ env.DEBUG_MODE }}
           AZURE_DEVOPS_PAT: ${{ secrets.AZURE_DEVOPS_PAT }}
         run: |
