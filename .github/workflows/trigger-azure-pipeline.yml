@@ -23,6 +23,11 @@ jobs:
           azure-pipeline-name: 'ni.labview-icon-editor-test'
           azure-devops-token: ${{ secrets.AZURE_DEVOPS_PAT }}
 
+#      - name: Wait for pipeline to start
+#        run: |
+#          echo "Waiting 2 minutes to allow the pipeline to start..."
+#          sleep 120
+
       - name: Find the in-progress pipeline run
         id: find-run
         env:
@@ -50,7 +55,7 @@ jobs:
 
           MAX_ATTEMPTS=10
           SLEEP_SECONDS=5
-          ATTEMPT=10
+          ATTEMPT=1
           BUILD_ID=""
 
           while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
@@ -120,7 +125,7 @@ jobs:
           STATUS_URL="https://dev.azure.com/${ORGANIZATION}/${PROJECT_NAME}/_apis/build/builds/${BUILD_ID}?api-version=6.0"
           TIMELINE_URL="https://dev.azure.com/${ORGANIZATION}/${PROJECT_NAME}/_apis/build/builds/${BUILD_ID}/timeline?api-version=6.0"
 
-          MAX_ATTEMPTS=100
+          MAX_ATTEMPTS=30
           SLEEP_SECONDS=10
           ATTEMPT=1
 
