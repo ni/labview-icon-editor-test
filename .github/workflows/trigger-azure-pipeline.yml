@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 env:
-  DEBUG_MODE: "true" # Set to "true" for verbose debugging
+  DEBUG_MODE: "false" # Set to "true" for verbose debugging
 
 jobs:
   trigger-azure-pipeline:
@@ -42,14 +42,14 @@ jobs:
             exit 1
           fi
 
-          AUTH_HEADER=$(echo -n ":${AZURE_DEVOPS_PAT}" | base64)
+          # Use printf and base64 -w 0 to avoid newlines in the encoded value.
+          AUTH_HEADER=$(printf ":%s" "${AZURE_DEVOPS_PAT}" | base64 -w 0)
           API_URL="https://dev.azure.com/${ORGANIZATION}/${PROJECT_NAME}/_apis/build/builds?definitions=${PIPELINE_DEFINITION_ID}&\$top=1&api-version=6.0"
 
           if [ "$DEBUG_MODE" = "true" ]; then
             echo "::debug::Fetching latest build from $API_URL"
           fi
 
-          # Fetch response using wget
           rm -f response.json || true
           if ! wget --quiet --header="Authorization: Basic ${AUTH_HEADER}" -O response.json "$API_URL"; then
             echo "Error: Failed to fetch build runs." >&2
@@ -100,7 +100,8 @@ jobs:
             exit 1
           fi
 
-          AUTH_HEADER=$(printf ":%s" "$AZURE_DEVOPS_PAT" | base64 -w 0)
+          # Use printf and base64 -w 0 again to avoid newlines.
+          AUTH_HEADER=$(printf ":%s" "${AZURE_DEVOPS_PAT}" | base64 -w 0)
           STATUS_URL="https://dev.azure.com/${ORGANIZATION}/${PROJECT_NAME}/_apis/build/builds/${BUILD_ID}?api-version=6.0"
 
           MAX_ATTEMPTS=30
@@ -153,7 +154,6 @@ jobs:
             exit 1
           fi
 
-          # Check the result if completed
           if [ "$RESULT" != "succeeded" ]; then
             echo "Error: Build completed but did not succeed. Result: $RESULT" >&2
             exit 1
