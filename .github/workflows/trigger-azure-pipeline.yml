@@ -6,16 +6,134 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read   # Restricting GitHub token permissions
-  # Add other permissions only if needed
+  contents: read
+
+env:
+  DEBUG_MODE: "true" # Set to "true" for verbose debugging
 
 jobs:
   trigger-azure-pipeline:
     runs-on: ubuntu-latest
     steps:
       - name: Trigger Azure DevOps Pipeline
+        id: trigger
         uses: Azure/pipelines@v1.2
         with:
           azure-devops-project-url: 'https://dev.azure.com/sergiovelderrain/sergiovelderrain'
           azure-pipeline-name: 'ni.labview-icon-editor-test'
           azure-devops-token: ${{ secrets.AZURE_DEVOPS_PAT }}
+
+      - name: Find the most recent pipeline run
+        id: find-run
+        run: |
+          set -euo pipefail
+          
+          PROJECT_NAME="sergiovelderrain"
+          ORGANIZATION="sergiovelderrain"
+          PIPELINE_DEFINITION_ID="3" # Change to your pipeline definition ID
+
+          AUTH_HEADER=$(echo -n ":${{ secrets.AZURE_DEVOPS_PAT }}" | base64)
+
+          API_URL="https://dev.azure.com/$ORGANIZATION/$PROJECT_NAME/_apis/build/builds?definitions=$PIPELINE_DEFINITION_ID&\$top=1&api-version=6.0"
+
+          if [ "$DEBUG_MODE" = "true" ]; then
+            echo "::debug::Fetching latest build from $API_URL"
+          fi
+          
+          RESPONSE=$(curl -f -s -H "Authorization: Basic $AUTH_HEADER" "$API_URL" || { echo "Error: Failed to fetch build runs"; exit 1; })
+
+          if [ "$DEBUG_MODE" = "true" ]; then
+            echo "::debug::Full response:"
+            echo "::debug::$RESPONSE"
+          fi
+
+          # Ensure jq is available
+          if ! command -v jq &> /dev/null
+          then
+            echo "Error: jq is not installed." >&2
+            exit 1
+          fi
+
+          BUILD_ID=$(echo "$RESPONSE" | jq -r '.value[0].id // empty')
+
+          if [ -z "$BUILD_ID" ]; then
+            echo "Error: No build ID found in response." >&2
+            if [ "$DEBUG_MODE" = "true" ]; then
+              echo "::debug::Response was: $RESPONSE"
+            fi
+            exit 1
+          fi
+
+          echo "BUILD_ID=$BUILD_ID" >> $GITHUB_ENV
+          if [ "$DEBUG_MODE" = "true" ]; then
+            echo "::debug::BUILD_ID=$BUILD_ID"
+          fi
+
+      - name: Poll pipeline status until completion
+        id: poll-status
+        run: |
+          set -euo pipefail
+
+          PROJECT_NAME="sergiovelderrain"
+          ORGANIZATION="sergiovelderrain"
+          AUTH_HEADER=$(echo -n ":${{ secrets.AZURE_DEVOPS_PAT }}" | base64)
+          BUILD_ID="${BUILD_ID}"
+
+          if [ "$DEBUG_MODE" = "true" ]; then
+            echo "::debug::Polling status for BUILD_ID=$BUILD_ID"
+          fi
+
+          # Maximum 30 checks (5 minutes if 10s per loop)
+          MAX_ATTEMPTS=30
+          SLEEP_SECONDS=10
+
+          ATTEMPT=1
+          STATUS=""
+          RESULT=""
+
+          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+            if [ "$DEBUG_MODE" = "true" ]; then
+              echo "::debug::Attempt $ATTEMPT of $MAX_ATTEMPTS"
+            fi
+
+            RESPONSE=$(curl -f -s -H "Authorization: Basic $AUTH_HEADER" "https://dev.azure.com/$ORGANIZATION/$PROJECT_NAME/_apis/build/builds/$BUILD_ID?api-version=6.0" || { echo "Error: Failed to fetch build status"; exit 1; })
+
+            if [ "$DEBUG_MODE" = "true" ]; then
+              echo "::debug::Pipeline status response:"
+              echo "::debug::$RESPONSE"
+            fi
+
+            STATUS=$(echo "$RESPONSE" | jq -r '.status // empty')
+            RESULT=$(echo "$RESPONSE" | jq -r '.result // empty')
+
+            if [ -z "$STATUS" ]; then
+              echo "Error: Status not found in pipeline response." >&2
+              if [ "$DEBUG_MODE" = "true" ]; then
+                echo "::debug::Response: $RESPONSE"
+              fi
+              exit 1
+            fi
+
+            echo "Current Status: $STATUS"
+            [ "$DEBUG_MODE" = "true" ] && echo "::debug::Current Result: $RESULT"
+
+            if [ "$STATUS" = "completed" ]; then
+              break
+            fi
+
+            sleep $SLEEP_SECONDS
+            ATTEMPT=$((ATTEMPT+1))
+          done
+
+          if [ "$STATUS" != "completed" ]; then
+            echo "Error: Build did not complete within the timeout." >&2
+            exit 1
+          fi
+
+          # If completed, check the result
+          if [ "$RESULT" != "succeeded" ]; then
+            echo "Error: Build completed but did not succeed. Result: $RESULT" >&2
+            exit 1
+          fi
+
+          echo "Build succeeded!"
