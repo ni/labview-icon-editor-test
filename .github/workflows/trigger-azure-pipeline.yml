@@ -5,6 +5,10 @@ on:
     types: [opened, synchronize, reopened]
   workflow_dispatch:
 
+permissions:
+  contents: read   # Restricting GitHub token permissions
+  # Add other permissions only if needed
+
 jobs:
   trigger-azure-pipeline:
     runs-on: ubuntu-latest
