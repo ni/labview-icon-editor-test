@@ -30,7 +30,7 @@ jobs:
           
           PROJECT_NAME="sergiovelderrain"
           ORGANIZATION="sergiovelderrain"
-          PIPELINE_DEFINITION_ID="123" # Change to your pipeline definition ID
+          PIPELINE_DEFINITION_ID="3" # Change to your pipeline definition ID
 
           AUTH_HEADER=$(echo -n ":${{ secrets.AZURE_DEVOPS_PAT }}" | base64)
 
