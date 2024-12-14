@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 env:
-  DEBUG_MODE: "false" # Set to "true" for verbose debugging
+  DEBUG_MODE: "true" # Set to "true" for verbose debugging
 
 jobs:
   trigger-azure-pipeline:
