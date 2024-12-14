@@ -125,9 +125,12 @@ jobs:
           STATUS_URL="https://dev.azure.com/${ORGANIZATION}/${PROJECT_NAME}/_apis/build/builds/${BUILD_ID}?api-version=6.0"
           TIMELINE_URL="https://dev.azure.com/${ORGANIZATION}/${PROJECT_NAME}/_apis/build/builds/${BUILD_ID}/timeline?api-version=6.0"
 
-          MAX_ATTEMPTS=1000
+          MAX_ATTEMPTS=100
           SLEEP_SECONDS=10
           ATTEMPT=1
+
+          # Remove old state files if they exist
+          rm -f previous_timeline_state.json current_timeline_state.json || true
 
           while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
             if [ "$DEBUG_MODE" = "true" ]; then
@@ -140,20 +143,11 @@ jobs:
               exit 1
             fi
 
-            if [ "$DEBUG_MODE" = "true" ]; then
-              echo "::debug::Pipeline status response:"
-              cat status.json | jq .
-            fi
-
             STATUS=$(jq -r '.status // empty' status.json)
             RESULT=$(jq -r '.result // empty' status.json)
 
             if [ -z "$STATUS" ]; then
               echo "Error: Status not found in pipeline response." >&2
-              if [ "$DEBUG_MODE" = "true" ]; then
-                echo "::debug::Parsed response:"
-                cat status.json
-              fi
               exit 1
             fi
 
@@ -162,20 +156,47 @@ jobs:
               echo "::debug::Current Result: $RESULT"
             fi
 
-            # Fetch and report timeline for more detailed feedback
+            # Fetch timeline
             rm -f timeline.json || true
             if ! wget --quiet --header="Authorization: Basic ${AUTH_HEADER}" -O timeline.json "$TIMELINE_URL"; then
               echo "Error: Failed to fetch timeline." >&2
               exit 1
             fi
 
-            # Print detailed timeline feedback
-            echo "---- Pipeline Detailed Timeline ----"
-            cat timeline.json | jq '.records[] | {Type: .type, Name: .name, State: .state, Result: .result, StartTime: .startTime, FinishTime: .finishTime, Issues: .issues}'
-            echo "-----------------------------------"
+            # Create a simplified state file of current timeline
+            # Includes id, name, state, result to detect changes
+            jq '[.records[] | {id: .id, name: .name, state: .state, result: .result, startTime: .startTime, finishTime: .finishTime, issues: .issues}]' timeline.json > current_timeline_state.json
+
+            if [ ! -f previous_timeline_state.json ]; then
+              # First iteration: print all data
+              echo "---- Pipeline Detailed Timeline (Initial) ----"
+              cat current_timeline_state.json | jq '.[]'
+              echo "---------------------------------------------"
+            else
+              # Subsequent iterations: print only changed or new tasks
+              CHANGES=$(jq -n --argfile old previous_timeline_state.json --argfile new current_timeline_state.json '
+                [
+                  ($new[] as $n |
+                    ($old[]? | select(.id==$n.id)) as $o |
+                    if $o == null or $o.state != $n.state or $o.result != $n.result then $n else empty end
+                  )
+                ] | map(select(. != null))
+              ')
+
+              if [ "$(echo "$CHANGES" | jq 'length')" -gt 0 ]; then
+                echo "---- Pipeline Detailed Timeline (Changes) ----"
+                echo "$CHANGES" | jq '.[]'
+                echo "---------------------------------------------"
+              else
+                echo "No new timeline changes since last check."
+              fi
+            fi
+
+            # Update previous timeline state
+            cp current_timeline_state.json previous_timeline_state.json
 
             if [ "$STATUS" = "completed" ]; then
-              # If completed, check the final result
+              # Completed, check final result
               break
             fi
 
@@ -194,3 +215,6 @@ jobs:
           fi
 
           echo "Build succeeded!"
+          
+          # Cleanup state files
+          rm -f previous_timeline_state.json current_timeline_state.json timeline.json status.json
