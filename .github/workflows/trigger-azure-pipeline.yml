@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 env:
-  DEBUG_MODE: "true" # Set to "true" for verbose debugging
+  DEBUG_MODE: "false" # Set to "true" for verbose debugging
 
 jobs:
   trigger-azure-pipeline:
@@ -25,41 +25,49 @@ jobs:
 
       - name: Find the most recent pipeline run
         id: find-run
+        env:
+          ORGANIZATION: sergiovelderrain
+          PROJECT_NAME: sergiovelderrain
+          PIPELINE_DEFINITION_ID: "123" # Replace with your pipeline definition ID
+          DEBUG_MODE: ${{ env.DEBUG_MODE }}
+          AZURE_DEVOPS_PAT: ${{ secrets.AZURE_DEVOPS_PAT }}
         run: |
           set -euo pipefail
-          
-          PROJECT_NAME="sergiovelderrain"
-          ORGANIZATION="sergiovelderrain"
-          PIPELINE_DEFINITION_ID="3" # Change to your pipeline definition ID
+          if [ "$DEBUG_MODE" = "true" ]; then
+            echo "::debug::Debug mode enabled."
+          fi
 
-          AUTH_HEADER=$(echo -n ":${{ secrets.AZURE_DEVOPS_PAT }}" | base64)
+          if [ -z "${AZURE_DEVOPS_PAT}" ]; then
+            echo "Error: AZURE_DEVOPS_PAT not set." >&2
+            exit 1
+          fi
 
-          API_URL="https://dev.azure.com/$ORGANIZATION/$PROJECT_NAME/_apis/build/builds?definitions=$PIPELINE_DEFINITION_ID&\$top=1&api-version=6.0"
+          AUTH_HEADER=$(echo -n ":${AZURE_DEVOPS_PAT}" | base64)
+          API_URL="https://dev.azure.com/${ORGANIZATION}/${PROJECT_NAME}/_apis/build/builds?definitions=${PIPELINE_DEFINITION_ID}&\$top=1&api-version=6.0"
 
           if [ "$DEBUG_MODE" = "true" ]; then
             echo "::debug::Fetching latest build from $API_URL"
           fi
-          
-          RESPONSE=$(curl -f -s -H "Authorization: Basic $AUTH_HEADER" "$API_URL" || { echo "Error: Failed to fetch build runs"; exit 1; })
 
-          if [ "$DEBUG_MODE" = "true" ]; then
-            echo "::debug::Full response:"
-            echo "::debug::$RESPONSE"
-          fi
-
-          # Ensure jq is available
-          if ! command -v jq &> /dev/null
-          then
-            echo "Error: jq is not installed." >&2
+          # Fetch response using wget
+          rm -f response.json || true
+          if ! wget --quiet --header="Authorization: Basic ${AUTH_HEADER}" -O response.json "$API_URL"; then
+            echo "Error: Failed to fetch build runs." >&2
             exit 1
           fi
 
-          BUILD_ID=$(echo "$RESPONSE" | jq -r '.value[0].id // empty')
+          if [ "$DEBUG_MODE" = "true" ]; then
+            echo "::debug::Full response:"
+            cat response.json | jq .
+          fi
+
+          BUILD_ID=$(jq -r '.value[0].id // empty' response.json)
 
           if [ -z "$BUILD_ID" ]; then
             echo "Error: No build ID found in response." >&2
             if [ "$DEBUG_MODE" = "true" ]; then
-              echo "::debug::Response was: $RESPONSE"
+              echo "::debug::Response:"
+              cat response.json
             fi
             exit 1
           fi
@@ -71,51 +79,66 @@ jobs:
 
       - name: Poll pipeline status until completion
         id: poll-status
+        env:
+          ORGANIZATION: sergiovelderrain
+          PROJECT_NAME: sergiovelderrain
+          DEBUG_MODE: ${{ env.DEBUG_MODE }}
+          AZURE_DEVOPS_PAT: ${{ secrets.AZURE_DEVOPS_PAT }}
         run: |
           set -euo pipefail
-
-          PROJECT_NAME="sergiovelderrain"
-          ORGANIZATION="sergiovelderrain"
-          AUTH_HEADER=$(echo -n ":${{ secrets.AZURE_DEVOPS_PAT }}" | base64)
-          BUILD_ID="${BUILD_ID}"
-
           if [ "$DEBUG_MODE" = "true" ]; then
-            echo "::debug::Polling status for BUILD_ID=$BUILD_ID"
+            echo "::debug::Debug mode enabled for polling."
           fi
 
-          # Maximum 30 checks (5 minutes if 10s per loop)
+          if [ -z "${AZURE_DEVOPS_PAT}" ]; then
+            echo "Error: AZURE_DEVOPS_PAT not set." >&2
+            exit 1
+          fi
+
+          if [ -z "${BUILD_ID:-}" ]; then
+            echo "Error: BUILD_ID not set." >&2
+            exit 1
+          fi
+
+          AUTH_HEADER=$(echo -n ":${AZURE_DEVOPS_PAT}" | base64)
+          STATUS_URL="https://dev.azure.com/${ORGANIZATION}/${PROJECT_NAME}/_apis/build/builds/${BUILD_ID}?api-version=6.0"
+
           MAX_ATTEMPTS=30
           SLEEP_SECONDS=10
-
           ATTEMPT=1
-          STATUS=""
-          RESULT=""
 
           while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
             if [ "$DEBUG_MODE" = "true" ]; then
               echo "::debug::Attempt $ATTEMPT of $MAX_ATTEMPTS"
             fi
 
-            RESPONSE=$(curl -f -s -H "Authorization: Basic $AUTH_HEADER" "https://dev.azure.com/$ORGANIZATION/$PROJECT_NAME/_apis/build/builds/$BUILD_ID?api-version=6.0" || { echo "Error: Failed to fetch build status"; exit 1; })
+            rm -f status.json || true
+            if ! wget --quiet --header="Authorization: Basic ${AUTH_HEADER}" -O status.json "$STATUS_URL"; then
+              echo "Error: Failed to fetch build status." >&2
+              exit 1
+            fi
 
             if [ "$DEBUG_MODE" = "true" ]; then
               echo "::debug::Pipeline status response:"
-              echo "::debug::$RESPONSE"
+              cat status.json | jq .
             fi
 
-            STATUS=$(echo "$RESPONSE" | jq -r '.status // empty')
-            RESULT=$(echo "$RESPONSE" | jq -r '.result // empty')
+            STATUS=$(jq -r '.status // empty' status.json)
+            RESULT=$(jq -r '.result // empty' status.json)
 
             if [ -z "$STATUS" ]; then
               echo "Error: Status not found in pipeline response." >&2
               if [ "$DEBUG_MODE" = "true" ]; then
-                echo "::debug::Response: $RESPONSE"
+                echo "::debug::Parsed response:"
+                cat status.json
               fi
               exit 1
             fi
 
             echo "Current Status: $STATUS"
-            [ "$DEBUG_MODE" = "true" ] && echo "::debug::Current Result: $RESULT"
+            if [ "$DEBUG_MODE" = "true" ]; then
+              echo "::debug::Current Result: $RESULT"
+            fi
 
             if [ "$STATUS" = "completed" ]; then
               break
@@ -126,11 +149,11 @@ jobs:
           done
 
           if [ "$STATUS" != "completed" ]; then
-            echo "Error: Build did not complete within the timeout." >&2
+            echo "Error: Build not completed within the timeout." >&2
             exit 1
           fi
 
-          # If completed, check the result
+          # Check the result if completed
           if [ "$RESULT" != "succeeded" ]; then
             echo "Error: Build completed but did not succeed. Result: $RESULT" >&2
             exit 1
