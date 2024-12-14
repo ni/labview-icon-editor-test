@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 env:
-  DEBUG_MODE: "true" # Set to "false" to reduce verbosity
+  DEBUG_MODE: "false" # Set to "false" to reduce verbosity
 
 jobs:
   trigger-azure-pipeline:
