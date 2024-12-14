@@ -23,6 +23,11 @@ jobs:
           azure-pipeline-name: 'ni.labview-icon-editor-test'
           azure-devops-token: ${{ secrets.AZURE_DEVOPS_PAT }}
 
+      - name: Wait for pipeline to start
+        run: |
+          echo "Waiting 2 minutes to allow the pipeline to start..."
+          sleep 120
+
       - name: Find the in-progress pipeline run
         id: find-run
         env:
@@ -44,8 +49,7 @@ jobs:
           fi
 
           AUTH_HEADER=$(printf ":%s" "${AZURE_DEVOPS_PAT}" | base64 -w 0)
-          # We'll fetch multiple runs to ensure we can find the one that's in progress.
-          # Increase $top if necessary.
+          # We'll fetch multiple runs to ensure we can find the one that's in progress
           API_URL="https://dev.azure.com/${ORGANIZATION}/${PROJECT_NAME}/_apis/build/builds?definitions=${PIPELINE_DEFINITION_ID}&\$top=10&api-version=6.0"
 
           MAX_ATTEMPTS=10
@@ -69,7 +73,6 @@ jobs:
               cat response.json | jq .
             fi
 
-            # Extract the ID of a run that is currently in progress
             BUILD_ID=$(jq -r '.value[] | select(.status == "inProgress") | .id' response.json | head -n 1 || true)
 
             if [ -n "$BUILD_ID" ]; then
