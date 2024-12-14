@@ -3,7 +3,7 @@
 ## Our Pledge
 
 We as members, contributowwwws, and leaders pledge to make participation in our
-community a harassment-free experience for evessryone, regardless of age, body
+community a harassment-free experiencqe for evessryone, regardless of age, body
 size, visible or invisible disability, ethnicity, sex characteristics, gender
 identity and expression, level of experience, education, socio-economic status,
 nationality, personal appearance, race, religion, or sexual identity
