@@ -203,10 +203,11 @@ jobs:
           echo "Build succeeded!"
           rm -f previous_timeline_state.json current_timeline_state.json timeline.json status.json
 
-      - name: Merge the pull request
-        if: ${{ success() && github.event_name == 'pull_request_target' }}
-        uses: actions-ecosystem/action-merge-pull-request@v1
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          pull_request: ${{ github.event.pull_request.number }}
-          merge_method: merge
+          - name: Merge the pull request
+            if: ${{ success() && github.event_name == 'pull_request_target' }}
+            uses: peter-evans/merge-pull-request@v3
+            with:
+              token: ${{ secrets.GITHUB_TOKEN }}
+              pull-request: ${{ github.event.pull_request.number }}
+              merge-method: merge
+
