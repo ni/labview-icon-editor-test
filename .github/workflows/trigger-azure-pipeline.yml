@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 env:
   DEBUG_MODE: "false" # Set to "false" to reduce verbosity
@@ -22,11 +23,6 @@ jobs:
           azure-devops-project-url: 'https://dev.azure.com/sergiovelderrain/sergiovelderrain'
           azure-pipeline-name: 'ni.labview-icon-editor-test'
           azure-devops-token: ${{ secrets.AZURE_DEVOPS_PAT }}
-
-#      - name: Wait for pipeline to start
-#        run: |
-#          echo "Waiting 2 minutes to allow the pipeline to start..."
-#          sleep 120
 
       - name: Find the in-progress pipeline run
         id: find-run
@@ -48,9 +44,7 @@ jobs:
             exit 1
           fi
 
-          # Use printf and base64 -w 0 to avoid newlines in the encoded value.
           AUTH_HEADER=$(printf ":%s" "${AZURE_DEVOPS_PAT}" | base64 -w 0)
-          # Use queryOrder=queueTimeDescending to ensure we get the newest runs first
           API_URL="https://dev.azure.com/${ORGANIZATION}/${PROJECT_NAME}/_apis/build/builds?definitions=${PIPELINE_DEFINITION_ID}&\$top=10&queryOrder=queueTimeDescending&api-version=6.0"
 
           MAX_ATTEMPTS=10
@@ -129,7 +123,6 @@ jobs:
           SLEEP_SECONDS=10
           ATTEMPT=1
 
-          # Remove old state files if they exist
           rm -f previous_timeline_state.json current_timeline_state.json || true
 
           while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
@@ -156,24 +149,19 @@ jobs:
               echo "::debug::Current Result: $RESULT"
             fi
 
-            # Fetch timeline
             rm -f timeline.json || true
             if ! wget --quiet --header="Authorization: Basic ${AUTH_HEADER}" -O timeline.json "$TIMELINE_URL"; then
               echo "Error: Failed to fetch timeline." >&2
               exit 1
             fi
 
-            # Create a simplified state file of current timeline
-            # Includes id, name, state, result to detect changes
             jq '[.records[] | {id: .id, name: .name, state: .state, result: .result, startTime: .startTime, finishTime: .finishTime, issues: .issues}]' timeline.json > current_timeline_state.json
 
             if [ ! -f previous_timeline_state.json ]; then
-              # First iteration: print all data
               echo "---- Pipeline Detailed Timeline (Initial) ----"
               cat current_timeline_state.json | jq '.[]'
               echo "---------------------------------------------"
             else
-              # Subsequent iterations: print only changed or new tasks
               CHANGES=$(jq -n --argfile old previous_timeline_state.json --argfile new current_timeline_state.json '
                 [
                   ($new[] as $n |
@@ -192,11 +180,9 @@ jobs:
               fi
             fi
 
-            # Update previous timeline state
             cp current_timeline_state.json previous_timeline_state.json
 
             if [ "$STATUS" = "completed" ]; then
-              # Completed, check final result
               break
             fi
 
@@ -215,6 +201,13 @@ jobs:
           fi
 
           echo "Build succeeded!"
-          
-          # Cleanup state files
           rm -f previous_timeline_state.json current_timeline_state.json timeline.json status.json
+
+      - name: Merge the pull request
+        if: ${{ success() && github.event_name == 'pull_request_target' }}
+        uses: peter-evans/merge-pull-request@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          pull-request: ${{ github.event.pull_request.number }}
+          merge-method: merge
+
