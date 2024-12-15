@@ -29,7 +29,7 @@ jobs:
       # 4. Run the Python script to fetch and store data
       - name: Fetch and Store Data in MySQL
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_PAT }}  # Use the PAT instead of the default GITHUB_TOKEN
+          GITHUB_TOKEN: ${{ secrets.PAT_GITHUB }}  # Use the PAT instead of the default GITHUB_TOKEN
           ORG_NAME: ni
           REQUIRED_TOPIC: ni-open-source
           MYSQL_HOST: 127.0.0.1
