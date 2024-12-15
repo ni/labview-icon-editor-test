@@ -59,6 +59,15 @@ def create_tables(cursor):
         )
     """)
 
+# Helper function to convert ISO 8601 to MySQL DATETIME format
+def convert_to_mysql_datetime(iso_timestamp):
+    try:
+        # Parse the ISO 8601 timestamp and remove 'Z'
+        return datetime.strptime(iso_timestamp.replace("Z", ""), "%Y-%m-%dT%H:%M:%S")
+    except ValueError as e:
+        print(f"Error parsing timestamp '{iso_timestamp}': {e}")
+        return None
+
 # Fetch data from GitHub API
 def fetch_data(url):
     print(f"Fetching data from: {url}")  # Debug: log the API URL
@@ -97,25 +106,31 @@ def has_required_topic(owner, repo, required_topic):
             return True
     return False
 
-# Insert data into MySQL
+# Insert data into traffic_views table
 def store_traffic_views(data, owner, repo, cursor):
     for view in data.get("views", []):
-        cursor.execute("""
-            INSERT INTO traffic_views (repo_owner, repo_name, timestamp, count, uniques)
-            VALUES (%s, %s, %s, %s, %s)
-        """, (owner, repo, view["timestamp"], view["count"], view["uniques"]))
+        timestamp = convert_to_mysql_datetime(view["timestamp"])
+        if timestamp:  # Only insert if timestamp is valid
+            cursor.execute("""
+                INSERT INTO traffic_views (repo_owner, repo_name, timestamp, count, uniques)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (owner, repo, timestamp, view["count"], view["uniques"]))
 
+# Insert data into traffic_clones table
 def store_traffic_clones(data, owner, repo, cursor):
     for clone in data.get("clones", []):
-        cursor.execute("""
-            INSERT INTO traffic_clones (repo_owner, repo_name, timestamp, count, uniques)
-            VALUES (%s, %s, %s, %s, %s)
-        """, (owner, repo, clone["timestamp"], clone["count"], clone["uniques"]))
+        timestamp = convert_to_mysql_datetime(clone["timestamp"])
+        if timestamp:  # Only insert if timestamp is valid
+            cursor.execute("""
+                INSERT INTO traffic_clones (repo_owner, repo_name, timestamp, count, uniques)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (owner, repo, timestamp, clone["count"], clone["uniques"]))
 
+# Insert data into stargazers table
 def store_stargazers(data, owner, repo, cursor):
     for stargazer in data:
         user = stargazer.get("login")
-        starred_at = stargazer.get("starred_at")
+        starred_at = convert_to_mysql_datetime(stargazer.get("starred_at"))
         if user and starred_at:
             cursor.execute("""
                 INSERT INTO stargazers (repo_owner, repo_name, user, starred_at)
