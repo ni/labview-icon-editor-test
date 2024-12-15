@@ -33,7 +33,7 @@ jobs:
           ORG_NAME: "ni"
           REQUIRED_TOPIC: "ni-open-source"
           MYSQL_HOST: "127.0.0.1"
-          MYSQL_USER: "svelderr"
+          MYSQL_USER: "root"
           MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
           MYSQL_DATABASE: "ni_open_source_github_data"
         run: python .github/scripts/fetch_store_org_data_conditional.py
