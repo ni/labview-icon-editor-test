@@ -61,13 +61,11 @@ def create_tables(cursor):
 
 # Fetch data from GitHub API
 def fetch_data(url):
-    print(f"Fetching data from: {url}")  # Debug: log the API URL
     response = requests.get(url, headers=HEADERS)
-    print(f"Response status: {response.status_code}")  # Debug: log response status
     if response.status_code == 200:
         return response.json()
     else:
-        print(f"Error fetching data from {url}: {response.text}")  # Debug: log response error
+        print(f"Error fetching data from {url}: {response.text}")  # Debug: log errors
         return None
 
 # Fetch all repositories under the organization
@@ -79,7 +77,7 @@ def fetch_org_repositories(org_name):
         response = fetch_data(f"{url}?per_page=100&page={page}")
         if not response:
             break
-        repos.extend(response)  # Append repositories
+        repos.extend(response)
         if len(response) < 100:  # End of pagination
             break
         page += 1
@@ -92,9 +90,7 @@ def has_required_topic(owner, repo, required_topic):
     response = fetch_data(url)
     if response and "names" in response:
         topics = response["names"]
-        print(f"Repository '{owner}/{repo}' topics: {topics}")  # Debug: log topics
         return required_topic in topics
-    print(f"Failed to fetch topics for '{owner}/{repo}'")  # Debug: log failure
     return False
 
 # Insert data into MySQL
@@ -129,19 +125,16 @@ def process_repository(owner, repo, cursor):
     # Fetch and store traffic views
     traffic_views = fetch_data(traffic_views_url)
     if traffic_views:
-        print(f"Storing traffic views for '{owner}/{repo}'")  # Debug: log data store action
         store_traffic_views(traffic_views, owner, repo, cursor)
 
     # Fetch and store traffic clones
     traffic_clones = fetch_data(traffic_clones_url)
     if traffic_clones:
-        print(f"Storing traffic clones for '{owner}/{repo}'")  # Debug: log data store action
         store_traffic_clones(traffic_clones, owner, repo, cursor)
 
     # Fetch and store stargazers
     stargazers = fetch_data(stargazers_url)
     if stargazers:
-        print(f"Storing stargazers for '{owner}/{repo}'")  # Debug: log data store action
         store_stargazers(stargazers, owner, repo, cursor)
 
 # Main function
@@ -157,31 +150,25 @@ def main():
     create_tables(cursor)
 
     detected_repos = []  # List to track repositories with the required topic
-    skipped_repos = []   # List to track repositories skipped
 
     # Process repositories with the required topic
     for repo in repos:
-        owner = repo.get("owner", {}).get("login")  # Get repository owner
-        repo_name = repo.get("name")  # Get repository name
+        owner = repo.get("owner", {}).get("login")
+        repo_name = repo.get("name")
         if owner and repo_name and has_required_topic(owner, repo_name, REQUIRED_TOPIC):
-            print(f"Processing repository: {owner}/{repo_name}")  # Debug: log processing
-            detected_repos.append(f"{owner}/{repo_name}")  # Add to detected list
+            print(f"Detected repository with topic '{REQUIRED_TOPIC}': {owner}/{repo_name}")  # Debug: log detected repos
+            detected_repos.append(f"{owner}/{repo_name}")
             process_repository(owner, repo_name, cursor)
-        else:
-            reason = "Missing required topic" if owner and repo_name else "Invalid repository data"
-            print(f"Skipping repository: {repo_name} ({reason})")  # Debug: log skip reason
-            skipped_repos.append(f"{repo_name}: {reason}")
 
     # Commit and close
     conn.commit()
     cursor.close()
     conn.close()
 
-    # Summary report
-    print("\n--- Summary Report ---")
-    print(f"Repositories with the topic '{REQUIRED_TOPIC}': {detected_repos}")
-    print(f"Skipped repositories: {skipped_repos}")
-    print("\nData stored successfully!")
+    # Summary of repositories with the required topic
+    print("\n--- Repositories with the Topic ---")
+    for repo in detected_repos:
+        print(repo)
 
 if __name__ == "__main__":
     main()
