@@ -30,6 +30,26 @@ def connect_to_mysql():
 # Create tables if not exist
 def create_tables(cursor):
     cursor.execute("""
+        CREATE TABLE IF NOT EXISTS traffic_views (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            repo_owner VARCHAR(255),
+            repo_name VARCHAR(255),
+            timestamp DATETIME,
+            count INT,
+            uniques INT
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS traffic_clones (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            repo_owner VARCHAR(255),
+            repo_name VARCHAR(255),
+            timestamp DATETIME,
+            count INT,
+            uniques INT
+        )
+    """)
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS stargazers (
             id INT AUTO_INCREMENT PRIMARY KEY,
             repo_owner VARCHAR(255),
@@ -74,6 +94,26 @@ def fetch_data(url):
         print(f"Error fetching data from {url}: {response.text}")
         return None
 
+# Insert data into traffic_views table
+def store_traffic_views(data, owner, repo, cursor):
+    for view in data.get("views", []):
+        timestamp = convert_to_mysql_datetime(view["timestamp"])
+        if timestamp:  # Only insert if timestamp is valid
+            cursor.execute("""
+                INSERT INTO traffic_views (repo_owner, repo_name, timestamp, count, uniques)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (owner, repo, timestamp, view["count"], view["uniques"]))
+
+# Insert data into traffic_clones table
+def store_traffic_clones(data, owner, repo, cursor):
+    for clone in data.get("clones", []):
+        timestamp = convert_to_mysql_datetime(clone["timestamp"])
+        if timestamp:  # Only insert if timestamp is valid
+            cursor.execute("""
+                INSERT INTO traffic_clones (repo_owner, repo_name, timestamp, count, uniques)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (owner, repo, timestamp, clone["count"], clone["uniques"]))
+
 # Insert data into stargazers table
 def store_stargazers(data, owner, repo, cursor):
     for stargazer in data:
@@ -115,8 +155,21 @@ def store_stargazers(data, owner, repo, cursor):
 # Process a single repository
 def process_repository(owner, repo, cursor):
     base_url = f"https://api.github.com/repos/{owner}/{repo}"
-    stargazers_url = f"{base_url}/stargazers"
 
+    # Fetch and store traffic views
+    traffic_views_url = f"{base_url}/traffic/views"
+    traffic_views = fetch_data(traffic_views_url)
+    if traffic_views:
+        store_traffic_views(traffic_views, owner, repo, cursor)
+
+    # Fetch and store traffic clones
+    traffic_clones_url = f"{base_url}/traffic/clones"
+    traffic_clones = fetch_data(traffic_clones_url)
+    if traffic_clones:
+        store_traffic_clones(traffic_clones, owner, repo, cursor)
+
+    # Fetch and store stargazers
+    stargazers_url = f"{base_url}/stargazers"
     stargazers = fetch_data(stargazers_url)
     if stargazers:
         store_stargazers(stargazers, owner, repo, cursor)
