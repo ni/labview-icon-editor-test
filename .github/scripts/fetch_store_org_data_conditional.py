@@ -92,9 +92,9 @@ def has_required_topic(owner, repo, required_topic):
     response = fetch_data(url)
     if response and "names" in response:
         topics = response["names"]
-        print(f"Repository '{owner}/{repo}' topics: {topics}")  # Debug: log topics
-        return required_topic in topics
-    print(f"Failed to fetch topics for '{owner}/{repo}'")  # Debug: log failure
+        if required_topic in topics:
+            print(f"Repository '{owner}/{repo}' has the topic '{required_topic}'")  # Debug: log matched repos
+            return True
     return False
 
 # Insert data into MySQL
@@ -114,7 +114,6 @@ def store_traffic_clones(data, owner, repo, cursor):
 
 def store_stargazers(data, owner, repo, cursor):
     for stargazer in data:
-        # Updated to handle 'login' directly and ensure 'starred_at' exists
         user = stargazer.get("login")
         starred_at = stargazer.get("starred_at")
         if user and starred_at:
@@ -133,28 +132,19 @@ def process_repository(owner, repo, cursor):
     traffic_views_url = f"{base_url}/traffic/views"
     traffic_views = fetch_data(traffic_views_url)
     if traffic_views:
-        print(f"Storing traffic views for '{owner}/{repo}'")
         store_traffic_views(traffic_views, owner, repo, cursor)
-    else:
-        print(f"Skipping traffic views for '{owner}/{repo}'")  # Debug: log missing traffic views
 
     # Fetch and store traffic clones
     traffic_clones_url = f"{base_url}/traffic/clones"
     traffic_clones = fetch_data(traffic_clones_url)
     if traffic_clones:
-        print(f"Storing traffic clones for '{owner}/{repo}'")
         store_traffic_clones(traffic_clones, owner, repo, cursor)
-    else:
-        print(f"Skipping traffic clones for '{owner}/{repo}'")  # Debug: log missing traffic clones
 
     # Fetch and store stargazers
     stargazers_url = f"{base_url}/stargazers"
     stargazers = fetch_data(stargazers_url)
     if stargazers:
-        print(f"Storing stargazers for '{owner}/{repo}'")
         store_stargazers(stargazers, owner, repo, cursor)
-    else:
-        print(f"Skipping stargazers for '{owner}/{repo}'")  # Debug: log missing stargazers
 
 # Main function
 def main():
@@ -168,26 +158,18 @@ def main():
     # Create tables
     create_tables(cursor)
 
-    detected_repos = []  # List to track repositories with the required topic
-
     # Process repositories with the required topic
     for repo in repos:
         owner = repo.get("owner", {}).get("login")
         repo_name = repo.get("name")
         if owner and repo_name and has_required_topic(owner, repo_name, REQUIRED_TOPIC):
-            print(f"Detected repository with topic '{REQUIRED_TOPIC}': {owner}/{repo_name}")
-            detected_repos.append(f"{owner}/{repo_name}")
+            print(f"Processing repository: {owner}/{repo_name}")  # Debug: log only matched repos
             process_repository(owner, repo_name, cursor)
 
     # Commit and close
     conn.commit()
     cursor.close()
     conn.close()
-
-    # Summary of repositories with the required topic
-    print("\n--- Repositories with the Topic ---")
-    for repo in detected_repos:
-        print(repo)
 
 if __name__ == "__main__":
     main()
