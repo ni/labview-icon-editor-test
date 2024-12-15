@@ -21,12 +21,39 @@ STARGAZERS_URL = f"{BASE_URL}/stargazers"
 
 # Connect to MySQL database
 def connect_to_mysql():
-    return mysql.connector.connect(
-        host=MYSQL_HOST,
-        user=MYSQL_USER,
-        password=MYSQL_PASSWORD,
-        database=MYSQL_DATABASE
-    )
+    try:
+        # Attempt to connect to the specified database
+        return mysql.connector.connect(
+            host=MYSQL_HOST,
+            user=MYSQL_USER,
+            password=MYSQL_PASSWORD,
+            database=MYSQL_DATABASE
+        )
+    except mysql.connector.errors.ProgrammingError as e:
+        # Check for "Unknown database" error
+        if "Unknown database" in str(e):
+            print(f"Database '{MYSQL_DATABASE}' does not exist. Creating it...")
+            # Connect to MySQL without specifying a database
+            conn = mysql.connector.connect(
+                host=MYSQL_HOST,
+                user=MYSQL_USER,
+                password=MYSQL_PASSWORD
+            )
+            cursor = conn.cursor()
+            # Create the database
+            cursor.execute(f"CREATE DATABASE {MYSQL_DATABASE}")
+            conn.commit()
+            cursor.close()
+            conn.close()
+            # Reconnect to the newly created database
+            return mysql.connector.connect(
+                host=MYSQL_HOST,
+                user=MYSQL_USER,
+                password=MYSQL_PASSWORD,
+                database=MYSQL_DATABASE
+            )
+        else:
+            raise
 
 # Create tables if not exist
 def create_tables(cursor):
