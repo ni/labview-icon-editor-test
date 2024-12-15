@@ -137,7 +137,7 @@ def store_stargazers(data, owner, repo, cursor):
                 VALUES (%s, %s, %s, %s)
             """, (owner, repo, user, starred_at))
         else:
-            print(f"Skipping invalid stargazer entry: {stargazer}")  # Debug: log invalid entries
+            print(f"Skipping invalid stargazer entry: {stargazer}")  # Debug: Log invalid entries
 
 # Process a single repository
 def process_repository(owner, repo, cursor):
