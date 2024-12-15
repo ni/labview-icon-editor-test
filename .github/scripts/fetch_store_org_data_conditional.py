@@ -130,7 +130,12 @@ def store_traffic_clones(data, owner, repo, cursor):
 def store_stargazers(data, owner, repo, cursor):
     for stargazer in data:
         user = stargazer.get("login")
-        starred_at = convert_to_mysql_datetime(stargazer.get("starred_at"))
+        starred_at_raw = stargazer.get("starred_at")
+        if not starred_at_raw:
+            print(f"Skipping stargazer entry with missing 'starred_at': {stargazer}")  # Debug: Log missing data
+            continue
+
+        starred_at = convert_to_mysql_datetime(starred_at_raw)
         if user and starred_at:
             cursor.execute("""
                 INSERT INTO stargazers (repo_owner, repo_name, user, starred_at)
