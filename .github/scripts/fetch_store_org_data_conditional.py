@@ -61,7 +61,9 @@ def create_tables(cursor):
 
 # Fetch data from GitHub API
 def fetch_data(url):
+    print(f"Fetching data from: {url}")  # Debug: log the API URL
     response = requests.get(url, headers=HEADERS)
+    print(f"Response status: {response.status_code}")  # Debug: log response status
     if response.status_code == 200:
         return response.json()
     else:
@@ -90,7 +92,9 @@ def has_required_topic(owner, repo, required_topic):
     response = fetch_data(url)
     if response and "names" in response:
         topics = response["names"]
+        print(f"Repository '{owner}/{repo}' topics: {topics}")  # Debug: log topics
         return required_topic in topics
+    print(f"Failed to fetch topics for '{owner}/{repo}'")  # Debug: log failure
     return False
 
 # Insert data into MySQL
@@ -110,32 +114,47 @@ def store_traffic_clones(data, owner, repo, cursor):
 
 def store_stargazers(data, owner, repo, cursor):
     for stargazer in data:
-        cursor.execute("""
-            INSERT INTO stargazers (repo_owner, repo_name, user, starred_at)
-            VALUES (%s, %s, %s, %s)
-        """, (owner, repo, stargazer["user"]["login"], stargazer["starred_at"]))
+        # Updated to handle 'login' directly and ensure 'starred_at' exists
+        user = stargazer.get("login")
+        starred_at = stargazer.get("starred_at")
+        if user and starred_at:
+            cursor.execute("""
+                INSERT INTO stargazers (repo_owner, repo_name, user, starred_at)
+                VALUES (%s, %s, %s, %s)
+            """, (owner, repo, user, starred_at))
+        else:
+            print(f"Skipping invalid stargazer entry: {stargazer}")  # Debug: log invalid entries
 
 # Process a single repository
 def process_repository(owner, repo, cursor):
     base_url = f"https://api.github.com/repos/{owner}/{repo}"
-    traffic_views_url = f"{base_url}/traffic/views"
-    traffic_clones_url = f"{base_url}/traffic/clones"
-    stargazers_url = f"{base_url}/stargazers"
-
+    
     # Fetch and store traffic views
+    traffic_views_url = f"{base_url}/traffic/views"
     traffic_views = fetch_data(traffic_views_url)
     if traffic_views:
+        print(f"Storing traffic views for '{owner}/{repo}'")
         store_traffic_views(traffic_views, owner, repo, cursor)
+    else:
+        print(f"Skipping traffic views for '{owner}/{repo}'")  # Debug: log missing traffic views
 
     # Fetch and store traffic clones
+    traffic_clones_url = f"{base_url}/traffic/clones"
     traffic_clones = fetch_data(traffic_clones_url)
     if traffic_clones:
+        print(f"Storing traffic clones for '{owner}/{repo}'")
         store_traffic_clones(traffic_clones, owner, repo, cursor)
+    else:
+        print(f"Skipping traffic clones for '{owner}/{repo}'")  # Debug: log missing traffic clones
 
     # Fetch and store stargazers
+    stargazers_url = f"{base_url}/stargazers"
     stargazers = fetch_data(stargazers_url)
     if stargazers:
+        print(f"Storing stargazers for '{owner}/{repo}'")
         store_stargazers(stargazers, owner, repo, cursor)
+    else:
+        print(f"Skipping stargazers for '{owner}/{repo}'")  # Debug: log missing stargazers
 
 # Main function
 def main():
@@ -156,7 +175,7 @@ def main():
         owner = repo.get("owner", {}).get("login")
         repo_name = repo.get("name")
         if owner and repo_name and has_required_topic(owner, repo_name, REQUIRED_TOPIC):
-            print(f"Detected repository with topic '{REQUIRED_TOPIC}': {owner}/{repo_name}")  # Debug: log detected repos
+            print(f"Detected repository with topic '{REQUIRED_TOPIC}': {owner}/{repo_name}")
             detected_repos.append(f"{owner}/{repo_name}")
             process_repository(owner, repo_name, cursor)
 
