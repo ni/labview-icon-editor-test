@@ -1,4 +1,4 @@
-name: Fetch and Store GitHub Data for Organization Repositories with Specific Topic
+name: Fetch and Store GitHub Data for Organization
 
 on:
   schedule:
@@ -29,11 +29,11 @@ jobs:
       # 4. Run the Python script to fetch and store data
       - name: Fetch and Store Data in MySQL
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ORG_NAME: "ni"
-          REQUIRED_TOPIC: "ni-open-source"
-          MYSQL_HOST: "127.0.0.1"
-          MYSQL_USER: "root"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_PAT }}  # Use the PAT instead of the default GITHUB_TOKEN
+          ORG_NAME: ni
+          REQUIRED_TOPIC: ni-open-source
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_USER: root
           MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
-          MYSQL_DATABASE: "ni_open_source_github_data"
+          MYSQL_DATABASE: ni_open_source_github_data
         run: python .github/scripts/fetch_store_org_data_conditional.py
