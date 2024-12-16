@@ -10,38 +10,20 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      # 1. Ensure Python is installed and accessible
-      - name: Install Python if not present
-        run: |
-          if (!(Get-Command python -ErrorAction SilentlyContinue)) {
-            Write-Host "Python not found. Installing Python..."
-            $pythonInstallerUrl = "https://www.python.org/ftp/python/3.9.13/python-3.9.13-amd64.exe"
-            $installerPath = "$env:USERPROFILE\\python-installer.exe"
-            Invoke-WebRequest -Uri $pythonInstallerUrl -OutFile $installerPath
-            Start-Process -FilePath $installerPath -ArgumentList "/quiet InstallAllUsers=1 PrependPath=1" -NoNewWindow -Wait
-            Remove-Item $installerPath
-            # Add Python to PATH temporarily for the workflow
-            $pythonPath = "C:\\Users\\${env:USERNAME}\\AppData\\Local\\Programs\\Python\\Python39\\"
-            $env:PATH += ";$pythonPath"
-          } else {
-            Write-Host "Python is already installed. Version: $(python --version)"
-          }
-        shell: powershell
-
-      # 2. Verify Python installation
+      # 1. Verify Python installation
       - name: Verify Python Installation
         run: |
           python --version
           pip --version
         shell: powershell
 
-      # 3. Install dependencies
+      # 2. Install dependencies
       - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install requests mysql-connector-python
 
-      # 4. Run the Python script to fetch and store data
+      # 3. Run the Python script to fetch and store data
       - name: Fetch and Store Data in MySQL
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_GITHUB }}  # Use the PAT instead of the default GITHUB_TOKEN
