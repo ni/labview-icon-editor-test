@@ -74,6 +74,8 @@ def create_tables(cursor):
             forked_from VARCHAR(255)
         )
     """)
+    # Modified stargazers table: removed avatar_url, url, html_url, followers_url, following_url,
+    # gists_url, subscriptions_url, organizations_url, repos_url, events_url, received_events_url
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS stargazers (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -82,18 +84,7 @@ def create_tables(cursor):
             user_login VARCHAR(255),
             user_id INT,
             node_id VARCHAR(255),
-            avatar_url TEXT,
-            url TEXT,
-            html_url TEXT,
-            followers_url TEXT,
-            following_url TEXT,
-            gists_url TEXT,
             starred_url TEXT,
-            subscriptions_url TEXT,
-            organizations_url TEXT,
-            repos_url TEXT,
-            events_url TEXT,
-            received_events_url TEXT,
             type VARCHAR(255),
             site_admin BOOLEAN,
             starred_at DATETIME,
@@ -179,12 +170,7 @@ def fetch_all_pages(url):
                 results.extend(data["items"])
             else:
                 # If data is a dict without items and not a list, assume no more data
-                # or single response endpoint.
                 if isinstance(data, dict) and data:
-                    # return single dict data if this endpoint is known to return a dict.
-                    # Typically not for stargazers or pulls though.
-                    # We'll merge this data if needed.
-                    # If not needed, break.
                     break
                 else:
                     break
@@ -231,33 +217,19 @@ def store_stargazers(stargazers_data, owner, repo, forked_from, cursor):
         user_login = user.get("login")
         user_id = user.get("id")
         node_id = user.get("node_id")
-        avatar_url = user.get("avatar_url")
-        url = user.get("url")
-        html_url = user.get("html_url")
-        followers_url = user.get("followers_url")
-        following_url = user.get("following_url")
-        gists_url = user.get("gists_url")
-        starred_url = user.get("starred_url")
-        subscriptions_url = user.get("subscriptions_url")
-        organizations_url = user.get("organizations_url")
-        repos_url = user.get("repos_url")
-        events_url = user.get("events_url")
-        received_events_url = user.get("received_events_url")
+        starred_url = user.get("starred_url")  # Keeping starred_url as example
+
         user_type = user.get("type")
         site_admin = user.get("site_admin", False)
 
         cursor.execute("""
             INSERT INTO stargazers (
-                repo_owner, repo_name, user_login, user_id, node_id, avatar_url, url,
-                html_url, followers_url, following_url, gists_url, starred_url,
-                subscriptions_url, organizations_url, repos_url, events_url,
-                received_events_url, type, site_admin, starred_at, forked_from
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                repo_owner, repo_name, user_login, user_id, node_id, starred_url,
+                type, site_admin, starred_at, forked_from
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
-            owner, repo, user_login, user_id, node_id, avatar_url, url,
-            html_url, followers_url, following_url, gists_url, starred_url,
-            subscriptions_url, organizations_url, repos_url, events_url,
-            received_events_url, user_type, site_admin, starred_at, forked_from
+            owner, repo, user_login, user_id, node_id, starred_url,
+            user_type, site_admin, starred_at, forked_from
         ))
 
 def store_pull_requests(pr_data, owner, repo, forked_from, cursor):
@@ -319,7 +291,7 @@ def process_repository(owner, repo, cursor, conn, forked_from=None):
     contributors = fetch_all_pages(f"{base_url}/contributors?per_page=100&anon=1")
     store_contributors(contributors, owner, repo, forked_from, cursor)
 
-    # Commit after processing this repository to ensure data integrity
+    # Commit after processing this repository
     conn.commit()
 
     # Forks (paginated)
@@ -339,7 +311,6 @@ def has_required_topic(owner, repo, required_topic):
     return False
 
 def check_token_validity():
-    # Check token by fetching the authenticated user
     resp = fetch_data("https://api.github.com/user")
     if not resp or not resp.get("login"):
         print("Invalid or insufficiently scoped GitHub token. Exiting.")
@@ -366,7 +337,7 @@ def main():
             print(f"Processing repository: {owner}/{repo_name}")
             process_repository(owner, repo_name, cursor, conn)
 
-    # Final commit in case something remains uncommitted
+    # Final commit
     conn.commit()
     cursor.close()
     conn.close()
