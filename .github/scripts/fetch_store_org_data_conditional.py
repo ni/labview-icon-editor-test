@@ -76,7 +76,6 @@ def create_tables(cursor):
             UNIQUE KEY (repo_owner, repo_name, timestamp)
         )
     """)
-    # Add organization column to stargazers
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS stargazers (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -94,7 +93,6 @@ def create_tables(cursor):
             UNIQUE KEY (repo_owner, repo_name, node_id)
         )
     """)
-    # Add organization column to pull_requests
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS pull_requests (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -115,7 +113,6 @@ def create_tables(cursor):
             UNIQUE KEY (repo_owner, repo_name, pr_number)
         )
     """)
-    # Add organization column to contributors
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS contributors (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -148,7 +145,6 @@ def handle_403(response):
             return
     except ValueError:
         pass
-    # Check permission issues
     try:
         data = response.json()
         message = data.get("message", "")
@@ -218,7 +214,6 @@ def fetch_all_pages(url):
             break
     return results
 
-# Cache for user organizations to avoid repeated calls
 user_org_cache = {}
 
 def get_user_organization(user_login, cache):
@@ -230,7 +225,6 @@ def get_user_organization(user_login, cache):
     orgs_url = f"https://api.github.com/users/{user_login}/orgs"
     orgs = fetch_data(orgs_url)
     if isinstance(orgs, list) and len(orgs) > 0:
-        # Take the first org's login as representative
         user_org = orgs[0].get("login")
     else:
         user_org = None
@@ -273,15 +267,15 @@ def store_stargazers(stargazers_data, owner, repo, forked_from, cursor):
         user_type = user.get("type")
         site_admin = user.get("site_admin", False)
 
-        # Fetch user organization
         organization = get_user_organization(user_login, user_org_cache)
 
+        # Update organization on duplicates too
         cursor.execute("""
             INSERT INTO stargazers (
                 repo_owner, repo_name, user_login, user_id, node_id, starred_url,
                 type, site_admin, starred_at, forked_from, organization
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON DUPLICATE KEY UPDATE node_id=node_id
+            ON DUPLICATE KEY UPDATE node_id=node_id, organization=VALUES(organization)
         """, (
             owner, repo, user_login, user_id, node_id, starred_url,
             user_type, site_admin, starred_at, forked_from, organization
@@ -301,8 +295,6 @@ def store_pull_requests(pr_data, owner, repo, forked_from, cursor):
         user_login = pr.get("user", {}).get("login")
         user_id = pr.get("user", {}).get("id")
         html_url = pr.get("html_url")
-
-        # Fetch user organization
         organization = get_user_organization(user_login, user_org_cache)
 
         cursor.execute("""
@@ -334,14 +326,13 @@ def store_contributors(contrib_data, owner, repo, forked_from, cursor):
         user_login = contrib.get("login")
         user_id = contrib.get("id")
         contributions = contrib.get("contributions")
-
-        # Fetch user organization
         organization = get_user_organization(user_login, user_org_cache)
 
+        # Update organization on duplicates
         cursor.execute("""
             INSERT INTO contributors (repo_owner, repo_name, user_login, user_id, contributions, forked_from, timestamp, organization)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            ON DUPLICATE KEY UPDATE user_id=user_id
+            ON DUPLICATE KEY UPDATE user_id=user_id, organization=VALUES(organization)
         """, (owner, repo, user_login, user_id, contributions, forked_from, now, organization))
 
 def process_repository(owner, repo, cursor, conn, forked_from=None):
