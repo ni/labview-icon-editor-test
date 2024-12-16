@@ -76,6 +76,7 @@ def create_tables(cursor):
             UNIQUE KEY (repo_owner, repo_name, timestamp)
         )
     """)
+    # Add organization column to stargazers
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS stargazers (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -89,9 +90,11 @@ def create_tables(cursor):
             site_admin BOOLEAN,
             starred_at DATETIME,
             forked_from VARCHAR(255),
+            organization VARCHAR(255),
             UNIQUE KEY (repo_owner, repo_name, node_id)
         )
     """)
+    # Add organization column to pull_requests
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS pull_requests (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -108,10 +111,11 @@ def create_tables(cursor):
             user_id INT,
             html_url TEXT,
             forked_from VARCHAR(255),
+            organization VARCHAR(255),
             UNIQUE KEY (repo_owner, repo_name, pr_number)
         )
     """)
-    # Add timestamp column to contributors and make (repo_owner, repo_name, user_login, contributions) unique
+    # Add organization column to contributors
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS contributors (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -122,6 +126,7 @@ def create_tables(cursor):
             contributions INT,
             forked_from VARCHAR(255),
             timestamp DATETIME,
+            organization VARCHAR(255),
             UNIQUE KEY (repo_owner, repo_name, user_login, contributions)
         )
     """)
@@ -213,12 +218,31 @@ def fetch_all_pages(url):
             break
     return results
 
+# Cache for user organizations to avoid repeated calls
+user_org_cache = {}
+
+def get_user_organization(user_login, cache):
+    if not user_login:
+        return None
+    if user_login in cache:
+        return cache[user_login]
+
+    orgs_url = f"https://api.github.com/users/{user_login}/orgs"
+    orgs = fetch_data(orgs_url)
+    if isinstance(orgs, list) and len(orgs) > 0:
+        # Take the first org's login as representative
+        user_org = orgs[0].get("login")
+    else:
+        user_org = None
+
+    cache[user_login] = user_org
+    return user_org
+
 def store_traffic_views(data, owner, repo, forked_from, cursor):
     views = data.get("views", []) if data else []
     for view in views:
         timestamp = convert_to_mysql_datetime(view["timestamp"])
         if timestamp:
-            # On duplicate, do nothing (no changes)
             cursor.execute("""
                 INSERT INTO traffic_views (repo_owner, repo_name, timestamp, count, uniques, forked_from)
                 VALUES (%s, %s, %s, %s, %s, %s)
@@ -230,7 +254,6 @@ def store_traffic_clones(data, owner, repo, forked_from, cursor):
     for clone in clones:
         timestamp = convert_to_mysql_datetime(clone["timestamp"])
         if timestamp:
-            # On duplicate, do nothing
             cursor.execute("""
                 INSERT INTO traffic_clones (repo_owner, repo_name, timestamp, count, uniques, forked_from)
                 VALUES (%s, %s, %s, %s, %s, %s)
@@ -250,16 +273,18 @@ def store_stargazers(stargazers_data, owner, repo, forked_from, cursor):
         user_type = user.get("type")
         site_admin = user.get("site_admin", False)
 
-        # On duplicate, do nothing
+        # Fetch user organization
+        organization = get_user_organization(user_login, user_org_cache)
+
         cursor.execute("""
             INSERT INTO stargazers (
                 repo_owner, repo_name, user_login, user_id, node_id, starred_url,
-                type, site_admin, starred_at, forked_from
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                type, site_admin, starred_at, forked_from, organization
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE node_id=node_id
         """, (
             owner, repo, user_login, user_id, node_id, starred_url,
-            user_type, site_admin, starred_at, forked_from
+            user_type, site_admin, starred_at, forked_from, organization
         ))
 
 def store_pull_requests(pr_data, owner, repo, forked_from, cursor):
@@ -277,12 +302,14 @@ def store_pull_requests(pr_data, owner, repo, forked_from, cursor):
         user_id = pr.get("user", {}).get("id")
         html_url = pr.get("html_url")
 
-        # On duplicate, only update if currently NULL and new value is not NULL
+        # Fetch user organization
+        organization = get_user_organization(user_login, user_org_cache)
+
         cursor.execute("""
             INSERT INTO pull_requests (
                 repo_owner, repo_name, pr_number, title, state, created_at, updated_at,
-                closed_at, merged_at, user_login, user_id, html_url, forked_from
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                closed_at, merged_at, user_login, user_id, html_url, forked_from, organization
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE
                 title=VALUES(title),
                 state=VALUES(state),
@@ -290,12 +317,13 @@ def store_pull_requests(pr_data, owner, repo, forked_from, cursor):
                 user_id=VALUES(user_id),
                 html_url=VALUES(html_url),
                 forked_from=VALUES(forked_from),
+                organization=VALUES(organization),
                 updated_at = CASE WHEN updated_at IS NULL AND VALUES(updated_at) IS NOT NULL THEN VALUES(updated_at) ELSE updated_at END,
                 closed_at = CASE WHEN closed_at IS NULL AND VALUES(closed_at) IS NOT NULL THEN VALUES(closed_at) ELSE closed_at END,
                 merged_at = CASE WHEN merged_at IS NULL AND VALUES(merged_at) IS NOT NULL THEN VALUES(merged_at) ELSE merged_at END
         """, (
             owner, repo, pr_number, title, state, created_at, updated_at,
-            closed_at, merged_at, user_login, user_id, html_url, forked_from
+            closed_at, merged_at, user_login, user_id, html_url, forked_from, organization
         ))
 
 def store_contributors(contrib_data, owner, repo, forked_from, cursor):
@@ -307,12 +335,14 @@ def store_contributors(contrib_data, owner, repo, forked_from, cursor):
         user_id = contrib.get("id")
         contributions = contrib.get("contributions")
 
-        # On duplicate, do nothing
+        # Fetch user organization
+        organization = get_user_organization(user_login, user_org_cache)
+
         cursor.execute("""
-            INSERT INTO contributors (repo_owner, repo_name, user_login, user_id, contributions, forked_from, timestamp)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO contributors (repo_owner, repo_name, user_login, user_id, contributions, forked_from, timestamp, organization)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE user_id=user_id
-        """, (owner, repo, user_login, user_id, contributions, forked_from, now))
+        """, (owner, repo, user_login, user_id, contributions, forked_from, now, organization))
 
 def process_repository(owner, repo, cursor, conn, forked_from=None):
     base_url = f"https://api.github.com/repos/{owner}/{repo}"
