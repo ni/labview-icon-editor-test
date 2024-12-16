@@ -12,7 +12,7 @@ MYSQL_HOST = os.getenv("MYSQL_HOST")
 MYSQL_USER = os.getenv("MYSQL_USER")
 MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
 MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
-DEBUG = (os.getenv("DEBUG", "true").lower() == "true")
+DEBUG = (os.getenv("DEBUG", "false").lower() == "true")
 
 HEADERS = {
     "Authorization": f"Bearer {GITHUB_TOKEN}",
@@ -60,7 +60,8 @@ def create_tables(cursor):
             timestamp DATETIME,
             count INT,
             uniques INT,
-            forked_from VARCHAR(255)
+            forked_from VARCHAR(255),
+            UNIQUE KEY (repo_owner, repo_name, timestamp)
         )
     """)
     cursor.execute("""
@@ -71,10 +72,10 @@ def create_tables(cursor):
             timestamp DATETIME,
             count INT,
             uniques INT,
-            forked_from VARCHAR(255)
+            forked_from VARCHAR(255),
+            UNIQUE KEY (repo_owner, repo_name, timestamp)
         )
     """)
-    # Modified stargazers table with removed columns
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS stargazers (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -87,7 +88,8 @@ def create_tables(cursor):
             type VARCHAR(255),
             site_admin BOOLEAN,
             starred_at DATETIME,
-            forked_from VARCHAR(255)
+            forked_from VARCHAR(255),
+            UNIQUE KEY (repo_owner, repo_name, node_id)
         )
     """)
     cursor.execute("""
@@ -105,9 +107,11 @@ def create_tables(cursor):
             user_login VARCHAR(255),
             user_id INT,
             html_url TEXT,
-            forked_from VARCHAR(255)
+            forked_from VARCHAR(255),
+            UNIQUE KEY (repo_owner, repo_name, pr_number)
         )
     """)
+    # Add timestamp column to contributors and make (repo_owner, repo_name, user_login, contributions) unique
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS contributors (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -116,7 +120,9 @@ def create_tables(cursor):
             user_login VARCHAR(255),
             user_id INT,
             contributions INT,
-            forked_from VARCHAR(255)
+            forked_from VARCHAR(255),
+            timestamp DATETIME,
+            UNIQUE KEY (repo_owner, repo_name, user_login, contributions)
         )
     """)
 
@@ -130,17 +136,14 @@ def convert_to_mysql_datetime(iso_timestamp):
         return None
 
 def handle_403(response):
-    # Distinguish between rate limit and permissions
     rate_limit_remaining = response.headers.get('X-RateLimit-Remaining')
     try:
         if rate_limit_remaining is not None and int(rate_limit_remaining) == 0:
             print("Rate limit exceeded. Please wait for your limit to reset or use a token with higher limits.")
             return
     except ValueError:
-        # If we can't parse it, move on.
         pass
-    
-    # Not rate limited, check if permission issue
+    # Check permission issues
     try:
         data = response.json()
         message = data.get("message", "")
@@ -187,7 +190,6 @@ def fetch_all_pages(url):
                     break
                 results.extend(data)
             elif isinstance(data, dict) and "items" in data:
-                # For search endpoints (not used here, but just in case)
                 results.extend(data["items"])
             else:
                 if isinstance(data, dict) and data:
@@ -216,9 +218,11 @@ def store_traffic_views(data, owner, repo, forked_from, cursor):
     for view in views:
         timestamp = convert_to_mysql_datetime(view["timestamp"])
         if timestamp:
+            # On duplicate, do nothing (no changes)
             cursor.execute("""
                 INSERT INTO traffic_views (repo_owner, repo_name, timestamp, count, uniques, forked_from)
                 VALUES (%s, %s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE count=count
             """, (owner, repo, timestamp, view["count"], view["uniques"], forked_from))
 
 def store_traffic_clones(data, owner, repo, forked_from, cursor):
@@ -226,9 +230,11 @@ def store_traffic_clones(data, owner, repo, forked_from, cursor):
     for clone in clones:
         timestamp = convert_to_mysql_datetime(clone["timestamp"])
         if timestamp:
+            # On duplicate, do nothing
             cursor.execute("""
                 INSERT INTO traffic_clones (repo_owner, repo_name, timestamp, count, uniques, forked_from)
                 VALUES (%s, %s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE count=count
             """, (owner, repo, timestamp, clone["count"], clone["uniques"], forked_from))
 
 def store_stargazers(stargazers_data, owner, repo, forked_from, cursor):
@@ -244,11 +250,13 @@ def store_stargazers(stargazers_data, owner, repo, forked_from, cursor):
         user_type = user.get("type")
         site_admin = user.get("site_admin", False)
 
+        # On duplicate, do nothing
         cursor.execute("""
             INSERT INTO stargazers (
                 repo_owner, repo_name, user_login, user_id, node_id, starred_url,
                 type, site_admin, starred_at, forked_from
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE node_id=node_id
         """, (
             owner, repo, user_login, user_id, node_id, starred_url,
             user_type, site_admin, starred_at, forked_from
@@ -268,27 +276,43 @@ def store_pull_requests(pr_data, owner, repo, forked_from, cursor):
         user_login = pr.get("user", {}).get("login")
         user_id = pr.get("user", {}).get("id")
         html_url = pr.get("html_url")
+
+        # On duplicate, only update if currently NULL and new value is not NULL
         cursor.execute("""
             INSERT INTO pull_requests (
                 repo_owner, repo_name, pr_number, title, state, created_at, updated_at,
                 closed_at, merged_at, user_login, user_id, html_url, forked_from
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                title=VALUES(title),
+                state=VALUES(state),
+                user_login=VALUES(user_login),
+                user_id=VALUES(user_id),
+                html_url=VALUES(html_url),
+                forked_from=VALUES(forked_from),
+                updated_at = CASE WHEN updated_at IS NULL AND VALUES(updated_at) IS NOT NULL THEN VALUES(updated_at) ELSE updated_at END,
+                closed_at = CASE WHEN closed_at IS NULL AND VALUES(closed_at) IS NOT NULL THEN VALUES(closed_at) ELSE closed_at END,
+                merged_at = CASE WHEN merged_at IS NULL AND VALUES(merged_at) IS NOT NULL THEN VALUES(merged_at) ELSE merged_at END
         """, (
-            owner, repo, pr_number, title, state, created_at, updated_at, closed_at,
-            merged_at, user_login, user_id, html_url, forked_from
+            owner, repo, pr_number, title, state, created_at, updated_at,
+            closed_at, merged_at, user_login, user_id, html_url, forked_from
         ))
 
 def store_contributors(contrib_data, owner, repo, forked_from, cursor):
     if not isinstance(contrib_data, list):
         return
+    now = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
     for contrib in contrib_data:
         user_login = contrib.get("login")
         user_id = contrib.get("id")
         contributions = contrib.get("contributions")
+
+        # On duplicate, do nothing
         cursor.execute("""
-            INSERT INTO contributors (repo_owner, repo_name, user_login, user_id, contributions, forked_from)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        """, (owner, repo, user_login, user_id, contributions, forked_from))
+            INSERT INTO contributors (repo_owner, repo_name, user_login, user_id, contributions, forked_from, timestamp)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE user_id=user_id
+        """, (owner, repo, user_login, user_id, contributions, forked_from, now))
 
 def process_repository(owner, repo, cursor, conn, forked_from=None):
     base_url = f"https://api.github.com/repos/{owner}/{repo}"
