@@ -74,8 +74,7 @@ def create_tables(cursor):
             forked_from VARCHAR(255)
         )
     """)
-    # Modified stargazers table: removed avatar_url, url, html_url, followers_url, following_url,
-    # gists_url, subscriptions_url, organizations_url, repos_url, events_url, received_events_url
+    # Modified stargazers table with removed columns
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS stargazers (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -130,6 +129,28 @@ def convert_to_mysql_datetime(iso_timestamp):
         print(f"Error parsing timestamp '{iso_timestamp}': {e}")
         return None
 
+def handle_403(response):
+    # Distinguish between rate limit and permissions
+    rate_limit_remaining = response.headers.get('X-RateLimit-Remaining')
+    try:
+        if rate_limit_remaining is not None and int(rate_limit_remaining) == 0:
+            print("Rate limit exceeded. Please wait for your limit to reset or use a token with higher limits.")
+            return
+    except ValueError:
+        # If we can't parse it, move on.
+        pass
+    
+    # Not rate limited, check if permission issue
+    try:
+        data = response.json()
+        message = data.get("message", "")
+        if "access" in message.lower() or "permission" in message.lower() or "resource not accessible" in message.lower():
+            print("Permission issue encountered. Check if your token has the necessary scopes/permissions.")
+        else:
+            print(f"Error 403 encountered: {message}")
+    except ValueError:
+        print("A 403 error occurred, but the response could not be parsed. Check your token or permissions.")
+
 def fetch_data(url):
     debug_print(f"Fetching data from: {url}")
     try:
@@ -142,7 +163,7 @@ def fetch_data(url):
     if response.status_code == 200:
         return response.json()
     elif response.status_code == 403:
-        print("Rate limit or permissions issue encountered. Check token scope.")
+        handle_403(response)
     else:
         print(f"Error fetching data from {url}: {response.text}")
     return None
@@ -169,7 +190,6 @@ def fetch_all_pages(url):
                 # For search endpoints (not used here, but just in case)
                 results.extend(data["items"])
             else:
-                # If data is a dict without items and not a list, assume no more data
                 if isinstance(data, dict) and data:
                     break
                 else:
@@ -183,6 +203,9 @@ def fetch_all_pages(url):
                         next_link = part.split(';')[0].strip('<> ')
                         break
             next_url = next_link
+        elif response.status_code == 403:
+            handle_403(response)
+            break
         else:
             print(f"Error fetching data (pagination) from {next_url}: {response.text}")
             break
@@ -217,8 +240,7 @@ def store_stargazers(stargazers_data, owner, repo, forked_from, cursor):
         user_login = user.get("login")
         user_id = user.get("id")
         node_id = user.get("node_id")
-        starred_url = user.get("starred_url")  # Keeping starred_url as example
-
+        starred_url = user.get("starred_url")
         user_type = user.get("type")
         site_admin = user.get("site_admin", False)
 
