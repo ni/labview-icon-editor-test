@@ -12,7 +12,7 @@ MYSQL_HOST = os.getenv("MYSQL_HOST")
 MYSQL_USER = os.getenv("MYSQL_USER")
 MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
 MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
-DEBUG = (os.getenv("DEBUG", "false").lower() == "true")
+DEBUG = (os.getenv("DEBUG", "true").lower() == "true")
 
 HEADERS = {
     "Authorization": f"Bearer {GITHUB_TOKEN}",
