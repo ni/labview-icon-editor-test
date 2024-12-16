@@ -13,7 +13,7 @@ jobs:
       # 1. Ensure Python is installed
       - name: Install Python if not present
         run: |
-          if (!(python --version)) {
+          if (!(Get-Command python -ErrorAction SilentlyContinue)) {
             Write-Host "Python not found. Installing Python..."
             $pythonInstallerUrl = "https://www.python.org/ftp/python/3.9.13/python-3.9.13-amd64.exe"
             $installerPath = "$env:USERPROFILE\\python-installer.exe"
@@ -23,14 +23,14 @@ jobs:
           } else {
             Write-Host "Python is already installed. Version: $(python --version)"
           }
-        shell: pwsh
+        shell: powershell
 
       # 2. Verify Python installation
       - name: Verify Python Installation
         run: |
           python --version
           pip --version
-        shell: pwsh
+        shell: powershell
 
       # 3. Install dependencies
       - name: Install Python Dependencies
