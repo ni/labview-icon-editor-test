@@ -10,20 +10,23 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      # 1. Verify Python installation
-      - name: Verify Python Installation
-        run: |
-          python --version
-          pip --version
-        shell: powershell
+      # 1. Checkout the repository
+      - name: Checkout Code
+        uses: actions/checkout@v3
 
-      # 2. Install dependencies
+      # 2. Set up Python
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      # 3. Install dependencies
       - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install requests mysql-connector-python
 
-      # 3. Run the Python script to fetch and store data
+      # 4. Run the Python script to fetch and store data
       - name: Fetch and Store Data in MySQL
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_GITHUB }}  # Use the PAT instead of the default GITHUB_TOKEN
