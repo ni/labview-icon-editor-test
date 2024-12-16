@@ -10,7 +10,7 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      # 1. Ensure Python is installed
+      # 1. Ensure Python is installed and accessible
       - name: Install Python if not present
         run: |
           if (!(Get-Command python -ErrorAction SilentlyContinue)) {
@@ -20,6 +20,9 @@ jobs:
             Invoke-WebRequest -Uri $pythonInstallerUrl -OutFile $installerPath
             Start-Process -FilePath $installerPath -ArgumentList "/quiet InstallAllUsers=1 PrependPath=1" -NoNewWindow -Wait
             Remove-Item $installerPath
+            # Add Python to PATH temporarily for the workflow
+            $pythonPath = "C:\\Users\\${env:USERNAME}\\AppData\\Local\\Programs\\Python\\Python39\\"
+            $env:PATH += ";$pythonPath"
           } else {
             Write-Host "Python is already installed. Version: $(python --version)"
           }
