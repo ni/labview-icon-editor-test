@@ -29,6 +29,7 @@ def connect_to_mysql():
 
 # Create tables if not exist
 def create_tables(cursor):
+    # Existing tables from original script
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS traffic_views (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -75,6 +76,35 @@ def create_tables(cursor):
         )
     """)
 
+    # New tables from enhanced functionality
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS pull_requests (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            repo_owner VARCHAR(255),
+            repo_name VARCHAR(255),
+            pr_number INT,
+            title TEXT,
+            state VARCHAR(50),
+            created_at DATETIME,
+            updated_at DATETIME,
+            closed_at DATETIME,
+            merged_at DATETIME,
+            user_login VARCHAR(255),
+            user_id INT,
+            html_url TEXT
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS contributors (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            repo_owner VARCHAR(255),
+            repo_name VARCHAR(255),
+            user_login VARCHAR(255),
+            user_id INT,
+            contributions INT
+        )
+    """)
+
 # Helper function to convert ISO 8601 to MySQL DATETIME format
 def convert_to_mysql_datetime(iso_timestamp):
     try:
@@ -98,7 +128,7 @@ def fetch_data(url):
 def store_traffic_views(data, owner, repo, cursor):
     for view in data.get("views", []):
         timestamp = convert_to_mysql_datetime(view["timestamp"])
-        if timestamp:  # Only insert if timestamp is valid
+        if timestamp:
             cursor.execute("""
                 INSERT INTO traffic_views (repo_owner, repo_name, timestamp, count, uniques)
                 VALUES (%s, %s, %s, %s, %s)
@@ -108,7 +138,7 @@ def store_traffic_views(data, owner, repo, cursor):
 def store_traffic_clones(data, owner, repo, cursor):
     for clone in data.get("clones", []):
         timestamp = convert_to_mysql_datetime(clone["timestamp"])
-        if timestamp:  # Only insert if timestamp is valid
+        if timestamp:
             cursor.execute("""
                 INSERT INTO traffic_clones (repo_owner, repo_name, timestamp, count, uniques)
                 VALUES (%s, %s, %s, %s, %s)
@@ -135,7 +165,6 @@ def store_stargazers(data, owner, repo, cursor):
         user_type = stargazer.get("type")
         site_admin = stargazer.get("site_admin", False)
         starred_at_raw = stargazer.get("starred_at")
-
         starred_at = convert_to_mysql_datetime(starred_at_raw) if starred_at_raw else None
 
         cursor.execute("""
@@ -152,7 +181,7 @@ def store_stargazers(data, owner, repo, cursor):
             received_events_url, user_type, site_admin, starred_at
         ))
 
-# Process a single repository
+# Process all repository data
 def process_repository(owner, repo, cursor):
     base_url = f"https://api.github.com/repos/{owner}/{repo}"
 
@@ -174,7 +203,7 @@ def process_repository(owner, repo, cursor):
     if stargazers:
         store_stargazers(stargazers, owner, repo, cursor)
 
-# Fetch all repositories under the organization
+# Fetch repositories in organization
 def fetch_org_repositories(org_name):
     url = f"https://api.github.com/orgs/{org_name}/repos"
     repos = []
@@ -190,7 +219,7 @@ def fetch_org_repositories(org_name):
     print(f"Fetched {len(repos)} repositories from organization '{org_name}'")
     return repos
 
-# Check if a repository has the required topic
+# Check if repository has required topic
 def has_required_topic(owner, repo, required_topic):
     url = f"https://api.github.com/repos/{owner}/{repo}/topics"
     response = fetch_data(url)
