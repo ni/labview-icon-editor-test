@@ -29,91 +29,94 @@ jobs:
         } else {
           Write-Host "Plugins folder not found. Skipping cleanup."
         }
-    - name: Add Token to LabVIEW (32-bit)
+
+    # Add Token and Prepare for 32-bit
+    - name: Add Token to LabVIEW 2021 (32-bit)
       shell: powershell
       run: |
         & ".\AddTokenToLabVIEW.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 32 -RelativePath "${{ env.RELATIVE_PATH }}"
 
-    - name: Prepare LabVIEW Source (32-bit)
+    - name: Prepare LabVIEW Source 2021 (32-bit)
       shell: powershell
       run: |
         & ".\Prepare_LabVIEW_source.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 32 -RelativePath "${{ env.RELATIVE_PATH }}" -LabVIEW_Project 'lv_icon_editor' -Build_Spec 'Editor Packed Library'
 
-    - name: Close LabVIEW (32-bit)
+    - name: Close LabVIEW 2021 (32-bit)
       shell: powershell
       run: |
         & ".\Close_LabVIEW.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 32
 
     # Add Token and Prepare for 64-bit
-    - name: Add Token to LabVIEW (64-bit)
+    - name: Add Token to LabVIEW 2021 (64-bit)
       shell: powershell
       run: |
         & ".\AddTokenToLabVIEW.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 64 -RelativePath "${{ env.RELATIVE_PATH }}"
 
-    - name: Prepare LabVIEW Source (64-bit)
+    - name: Prepare LabVIEW Source 2021 (64-bit)
       shell: powershell
       run: |
         & ".\Prepare_LabVIEW_source.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 64 -RelativePath "${{ env.RELATIVE_PATH }}" -LabVIEW_Project 'lv_icon_editor' -Build_Spec 'Editor Packed Library'
 
-    - name: Close LabVIEW (64-bit)
+    - name: Close LabVIEW 2021 (64-bit)
       shell: powershell
       run: |
         & ".\Close_LabVIEW.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 64
+
     # 32-bit Steps
-    - name: Apply Dependencies (32-bit)
+    - name: Apply Dependencies 2021 (32-bit)
       shell: powershell
       run: |
         & "${{ env.SCRIPTS_PATH }}\Applyvipc.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 32 -RelativePath "${{ env.RELATIVE_PATH }}" -VIPCPath "Tooling\deployment\Dependencies.vipc" -VIP_LVVersion 2021
 
-    - name: Run Unit Tests (32-bit)
+    - name: Run Unit Tests 2021 (32-bit)
       shell: powershell
       run: |
         & "${{ env.SCRIPTS_PATH }}\RunUnitTests.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 32 -RelativePath "${{ env.RELATIVE_PATH }}"
 
-    - name: Build LV Library (32-bit)
+    - name: Build LV Library 2021 (32-bit)
       shell: powershell
       run: |
         & "${{ env.SCRIPTS_PATH }}\Build_lvlibp.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 32 -RelativePath "${{ env.RELATIVE_PATH }}"
 
-    - name: Close LabVIEW (32-bit)
+    - name: Close LabVIEW 2021 (32-bit)
       shell: powershell
       run: |
         & "${{ env.SCRIPTS_PATH }}\Close_LabVIEW.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 32
 
-    - name: Rename File After Build (32-bit)
+    - name: Rename File After Build 2021 (32-bit)
       shell: powershell
       run: |
         $CurrentFile = "${{ env.RELATIVE_PATH }}\resource\plugins\lv_icon.lvlibp"
         & "${{ env.SCRIPTS_PATH }}\Rename-File.ps1" -CurrentFilename $CurrentFile -NewFilename "lv_icon_x86.lvlibp"
 
     # 64-bit Steps
-    - name: Apply Dependencies (64-bit)
+    - name: Apply Dependencies 2021 (64-bit)
       shell: powershell
       run: |
         & "${{ env.SCRIPTS_PATH }}\Applyvipc.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 64 -RelativePath "${{ env.RELATIVE_PATH }}" -VIPCPath "Tooling\deployment\Dependencies.vipc" -VIP_LVVersion 2021
 
-    - name: Run Unit Tests (64-bit)
+    - name: Run Unit Tests 2021 (64-bit)
       shell: powershell
       run: |
         & "${{ env.SCRIPTS_PATH }}\RunUnitTests.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 64 -RelativePath "${{ env.RELATIVE_PATH }}"
 
-    - name: Build LV Library (64-bit)
+    - name: Build LV Library 2021 (64-bit)
       shell: powershell
       run: |
         & "${{ env.SCRIPTS_PATH }}\Build_lvlibp.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 64 -RelativePath "${{ env.RELATIVE_PATH }}"
 
-    - name: Rename File After Build (64-bit)
+    - name: Rename File After Build 2021 (64-bit)
       shell: powershell
       run: |
         $CurrentFile = "${{ env.RELATIVE_PATH }}\resource\plugins\lv_icon.lvlibp"
         & "${{ env.SCRIPTS_PATH }}\Rename-File.ps1" -CurrentFilename $CurrentFile -NewFilename "lv_icon_x64.lvlibp"
 
-    - name: Build VI Package (64-bit)
+    - name: Build VI Package 2021 (64-bit)
       shell: powershell
       run: |
         & "${{ env.SCRIPTS_PATH }}\build_vip.ps1" -SupportedBitness 64 -RelativePath "${{ env.RELATIVE_PATH }}" -VIPBPath "Tooling\deployment\NI Icon editor.vipb" -VIP_LVVersion 2021 -MinimumSupportedLVVersion 2021
 
-    - name: Close LabVIEW (64-bit)
+    - name: Close LabVIEW 2021 (64-bit)
       shell: powershell
       run: |
         & "${{ env.SCRIPTS_PATH }}\Close_LabVIEW.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 64
