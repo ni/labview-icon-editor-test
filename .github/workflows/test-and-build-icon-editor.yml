@@ -29,7 +29,7 @@ jobs:
           Write-Host "Plugins folder not found. Skipping cleanup."
         }
 
-    # Add Token and Prepare for 32-bit
+    # Sequential script calls with clear step names
     - name: Add Token to LabVIEW 2021 (32-bit)
       shell: powershell
       run: |
@@ -45,7 +45,6 @@ jobs:
       run: |
         & "${{ env.SCRIPTS_PATH }}\Close_LabVIEW.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 32
 
-    # Add Token and Prepare for 64-bit
     - name: Add Token to LabVIEW 2021 (64-bit)
       shell: powershell
       run: |
@@ -61,7 +60,6 @@ jobs:
       run: |
         & "${{ env.SCRIPTS_PATH }}\Close_LabVIEW.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 64
 
-    # 32-bit Steps
     - name: Apply Dependencies 2021 (32-bit)
       shell: powershell
       run: |
@@ -77,18 +75,12 @@ jobs:
       run: |
         & "${{ env.SCRIPTS_PATH }}\Build_lvlibp.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 32 -RelativePath "${{ env.RELATIVE_PATH }}"
 
-    - name: Close LabVIEW 2021 (32-bit)
-      shell: powershell
-      run: |
-        & "${{ env.SCRIPTS_PATH }}\Close_LabVIEW.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 32
-
     - name: Rename File After Build 2021 (32-bit)
       shell: powershell
       run: |
         $CurrentFile = "${{ env.RELATIVE_PATH }}\resource\plugins\lv_icon.lvlibp"
         & "${{ env.SCRIPTS_PATH }}\Rename-File.ps1" -CurrentFilename $CurrentFile -NewFilename "lv_icon_x86.lvlibp"
 
-    # 64-bit Steps
     - name: Apply Dependencies 2021 (64-bit)
       shell: powershell
       run: |
