@@ -126,7 +126,7 @@ jobs:
           TIMELINE_URL="https://dev.azure.com/${ORGANIZATION}/${PROJECT_NAME}/_apis/build/builds/${BUILD_ID}/timeline?api-version=6.0"
 
           MAX_ATTEMPTS=100
-          SLEEP_SECONDS=10
+          SLEEP_SECONDS=20
           ATTEMPT=1
 
           # Remove old state files if they exist
