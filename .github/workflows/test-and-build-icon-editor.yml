@@ -1,11 +1,10 @@
 name: Build LabVIEW Project
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+  
 jobs:
   build:
     name: Build LabVIEW
