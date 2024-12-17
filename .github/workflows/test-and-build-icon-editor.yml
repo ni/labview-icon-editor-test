@@ -30,24 +30,11 @@ jobs:
           Write-Host "Plugins folder not found. Skipping cleanup."
         }
 
-    # Steps for 32-bit
-    - name: Add Token to LabVIEW 2021 (32-bit)
+    - name: Set agent into development mode
       shell: powershell
       working-directory: ${{ env.SCRIPTS_PATH }}
       run: |
-        & ".\AddTokenToLabVIEW.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 32 -RelativePath "${{ env.RELATIVE_PATH }}"
-
-    - name: Prepare LabVIEW Source 2021 (32-bit)
-      shell: powershell
-      working-directory: ${{ env.SCRIPTS_PATH }}
-      run: |
-        & ".\Prepare_LabVIEW_source.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 32 -RelativePath "${{ env.RELATIVE_PATH }}" -LabVIEW_Project 'lv_icon_editor' -Build_Spec 'Editor Packed Library'
-
-    - name: Close LabVIEW 2021 (32-bit)
-      shell: powershell
-      working-directory: ${{ env.SCRIPTS_PATH }}
-      run: |
-        & ".\Close_LabVIEW.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 32
+        & ".\Set_Development_Mode.ps1" -RelativePath "${{ env.RELATIVE_PATH }}"
 
     - name: Apply Dependencies 2021 (32-bit)
       shell: powershell
@@ -73,25 +60,6 @@ jobs:
       run: |
         $CurrentFile = "${{ env.RELATIVE_PATH }}\resource\plugins\lv_icon.lvlibp"
         & ".\Rename-File.ps1" -CurrentFilename $CurrentFile -NewFilename "lv_icon_x86.lvlibp"
-
-    # Steps for 64-bit
-    - name: Add Token to LabVIEW 2021 (64-bit)
-      shell: powershell
-      working-directory: ${{ env.SCRIPTS_PATH }}
-      run: |
-        & ".\AddTokenToLabVIEW.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 64 -RelativePath "${{ env.RELATIVE_PATH }}"
-
-    - name: Prepare LabVIEW Source 2021 (64-bit)
-      shell: powershell
-      working-directory: ${{ env.SCRIPTS_PATH }}
-      run: |
-        & ".\Prepare_LabVIEW_source.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 64 -RelativePath "${{ env.RELATIVE_PATH }}" -LabVIEW_Project 'lv_icon_editor' -Build_Spec 'Editor Packed Library'
-
-    - name: Close LabVIEW 2021 (64-bit)
-      shell: powershell
-      working-directory: ${{ env.SCRIPTS_PATH }}
-      run: |
-        & ".\Close_LabVIEW.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 64
 
     - name: Apply Dependencies 2021 (64-bit)
       shell: powershell
