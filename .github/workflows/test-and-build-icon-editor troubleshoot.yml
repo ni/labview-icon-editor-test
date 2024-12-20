@@ -1,0 +1,99 @@
+name: Build LabVIEW Project
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build LabVIEW
+    runs-on: windows-latest
+    env:
+      RELATIVE_PATH: ${{ vars.AgentWorkingFolder }}
+      SCRIPTS_PATH: ${{ vars.AgentWorkingFolder }}\pipeline\scripts
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v1.0.0
+
+    - name: Clean Up Old .lvlibp Files
+      shell: powershell
+      working-directory: ${{ env.RELATIVE_PATH }}
+      run: |
+        $PluginsPath = "${{ env.RELATIVE_PATH }}\resource\plugins"
+        Write-Host "Cleaning up .lvlibp files in $PluginsPath..."
+        if (Test-Path -Path $PluginsPath) {
+          Get-ChildItem -Path $PluginsPath -Filter '*.lvlibp' | Remove-Item -Force -ErrorAction SilentlyContinue
+          Write-Host "Cleanup complete."
+        } else {
+          Write-Host "Plugins folder not found. Skipping cleanup."
+        }
+
+    - name: Set agent into development mode
+      shell: powershell
+      working-directory: ${{ env.SCRIPTS_PATH }}
+      run: |
+        & ".\Set_Development_Mode.ps1" -RelativePath "${{ env.RELATIVE_PATH }}"
+
+    - name: Apply Dependencies 2021 (32-bit)
+      shell: powershell
+      working-directory: ${{ env.SCRIPTS_PATH }}
+      run: |
+        & ".\Applyvipc.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 32 -RelativePath "${{ env.RELATIVE_PATH }}" -VIPCPath "Tooling\deployment\Dependencies.vipc" -VIP_LVVersion 2021
+
+    - name: Run Unit Tests 2021 (32-bit)
+      shell: powershell
+      working-directory: ${{ env.SCRIPTS_PATH }}
+      run: |
+        & ".\RunUnitTests.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 32 -RelativePath "${{ env.RELATIVE_PATH }}"
+
+    - name: Build LV Library 2021 (32-bit)
+      shell: powershell
+      working-directory: ${{ env.SCRIPTS_PATH }}
+      run: |
+        & ".\Build_lvlibp.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 32 -RelativePath "${{ env.RELATIVE_PATH }}"
+
+    - name: Rename File After Build 2021 (32-bit)
+      shell: powershell
+      working-directory: ${{ env.SCRIPTS_PATH }}
+      run: |
+        $CurrentFile = "${{ env.RELATIVE_PATH }}\resource\plugins\lv_icon.lvlibp"
+        & ".\Rename-File.ps1" -CurrentFilename $CurrentFile -NewFilename "lv_icon_x86.lvlibp"
+
+    - name: Apply Dependencies 2021 (64-bit)
+      shell: powershell
+      working-directory: ${{ env.SCRIPTS_PATH }}
+      run: |
+        & ".\Applyvipc.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 64 -RelativePath "${{ env.RELATIVE_PATH }}" -VIPCPath "Tooling\deployment\Dependencies.vipc" -VIP_LVVersion 2021
+
+    - name: Run Unit Tests 2021 (64-bit)
+      shell: powershell
+      working-directory: ${{ env.SCRIPTS_PATH }}
+      run: |
+        & ".\RunUnitTests.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 64 -RelativePath "${{ env.RELATIVE_PATH }}"
+
+    - name: Build LV Library 2021 (64-bit)
+      shell: powershell
+      working-directory: ${{ env.SCRIPTS_PATH }}
+      run: |
+        & ".\Build_lvlibp.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 64 -RelativePath "${{ env.RELATIVE_PATH }}"
+
+    - name: Rename File After Build 2021 (64-bit)
+      shell: powershell
+      working-directory: ${{ env.SCRIPTS_PATH }}
+      run: |
+        $CurrentFile = "${{ env.RELATIVE_PATH }}\resource\plugins\lv_icon.lvlibp"
+        & ".\Rename-File.ps1" -CurrentFilename $CurrentFile -NewFilename "lv_icon_x64.lvlibp"
+
+    - name: Build VI Package 2021 (64-bit)
+      shell: powershell
+      working-directory: ${{ env.SCRIPTS_PATH }}
+      run: |
+        & ".\build_vip.ps1" -SupportedBitness 64 -RelativePath "${{ env.RELATIVE_PATH }}" -VIPBPath "Tooling\deployment\NI Icon editor.vipb" -VIP_LVVersion 2021 -MinimumSupportedLVVersion 2021
+
+    - name: Close LabVIEW 2021 (64-bit)
+      shell: powershell
+      working-directory: ${{ env.SCRIPTS_PATH }}
+      run: |
+        & ".\Close_LabVIEW.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 64
