@@ -11,7 +11,7 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v1.0.0
+      uses: actions/checkout@v3
     - name: Add token to LabVIEW ${{ vars.MinimumSupportedLVVersion }} (64-bit) ini file
       run: |
         g-cli --lv-ver ${{ vars.MinimumSupportedLVVersion }} --arch 64 -v "${{ vars.RelativePath }}\Tooling\deployment\Create_LV_INI_Token.vi" -- LabVIEW Localhost.LibraryPaths "${{ vars.RelativePath }}"
