@@ -1,4 +1,4 @@
-name: Build LabVIEW Project
+name: Troubleshoot agent
 
 on:
   pull_request_target:
