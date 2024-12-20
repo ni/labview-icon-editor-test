@@ -15,85 +15,89 @@ jobs:
       SCRIPTS_PATH: ${{ github.workspace }}\pipeline\scripts
 
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v3
+      - name: Checkout Repository
+        uses: actions/checkout@v3
 
-    - name: Clean Up Old .lvlibp Files
-      shell: pwsh
-      run: |
-        $PluginsPath = "${{ env.RELATIVE_PATH }}\resource\plugins"
-        Write-Host "Cleaning up .lvlibp files in $PluginsPath..."
-        if (Test-Path -Path $PluginsPath) {
-          Get-ChildItem -Path $PluginsPath -Filter '*.lvlibp' | Remove-Item -Force -ErrorAction SilentlyContinue
-          Write-Host "Cleanup complete."
-        } else {
-          Write-Host "Plugins folder not found. Skipping cleanup."
-        }
+      - name: Clean Up Old .lvlibp Files
+        shell: pwsh
+        run: |
+          $PluginsPath = "${{ env.RELATIVE_PATH }}\resource\plugins"
+          Write-Host "Cleaning up .lvlibp files in $PluginsPath..."
+          if (Test-Path -Path $PluginsPath) {
+            Get-ChildItem -Path $PluginsPath -Filter '*.lvlibp' | Remove-Item -Force -ErrorAction SilentlyContinue
+            Write-Host "Cleanup complete."
+          } else {
+            Write-Host "Plugins folder not found. Skipping cleanup."
+          }
 
-    - name: Set agent into development mode
-      shell: pwsh
-      working-directory: ${{ env.SCRIPTS_PATH }}
-      run: |
-        & ".\powershell\Set_Development_Mode.ps1" -RelativePath "${{ env.RELATIVE_PATH }}"
+      # Ensure that Set_Development_Mode.ps1 sets $ErrorActionPreference = 'Stop'
+      # and handles errors appropriately so that if it fails, the rest of the steps won't run.
+      - name: Set agent into development mode
+        shell: pwsh
+        working-directory: ${{ env.SCRIPTS_PATH }}
+        run: |
+          .\powershell\Set_Development_Mode.ps1 -RelativePath "${{ env.RELATIVE_PATH }}"
 
-    - name: Apply Dependencies 2021 (32-bit)
-      shell: pwsh
-      working-directory: ${{ env.SCRIPTS_PATH }}
-      run: |
-        & ".\powershell\Applyvipc.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 32 -RelativePath "${{ env.RELATIVE_PATH }}" -VIPCPath "Tooling\deployment\Dependencies.vipc" -VIP_LVVersion 2021
+      # Subsequent steps only run if the previous steps succeed.
+      # If any script fails, it will cause the job to fail and subsequent steps won't run.
+      - name: Apply Dependencies 2021 (32-bit)
+        shell: pwsh
+        working-directory: ${{ env.SCRIPTS_PATH }}
+        run: |
+          .\powershell\Applyvipc.ps1 -MinimumSupportedLVVersion 2021 -SupportedBitness 32 -RelativePath "${{ env.RELATIVE_PATH }}" -VIPCPath "Tooling\deployment\Dependencies.vipc" -VIP_LVVersion 2021
 
-    - name: Run Unit Tests 2021 (32-bit)
-      shell: pwsh
-      working-directory: ${{ env.SCRIPTS_PATH }}
-      run: |
-        & ".\powershell\RunUnitTests.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 32 -RelativePath "${{ env.RELATIVE_PATH }}"
+      - name: Run Unit Tests 2021 (32-bit)
+        shell: pwsh
+        working-directory: ${{ env.SCRIPTS_PATH }}
+        run: |
+          .\powershell\RunUnitTests.ps1 -MinimumSupportedLVVersion 2021 -SupportedBitness 32 -RelativePath "${{ env.RELATIVE_PATH }}"
 
-    - name: Build LV Library 2021 (32-bit)
-      shell: pwsh
-      working-directory: ${{ env.SCRIPTS_PATH }}
-      run: |
-        & ".\powershell\Build_lvlibp.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 32 -RelativePath "${{ env.RELATIVE_PATH }}"
+      - name: Build LV Library 2021 (32-bit)
+        shell: pwsh
+        working-directory: ${{ env.SCRIPTS_PATH }}
+        run: |
+          .\powershell\Build_lvlibp.ps1 -MinimumSupportedLVVersion 2021 -SupportedBitness 32 -RelativePath "${{ env.RELATIVE_PATH }}"
 
-    - name: Rename File After Build 2021 (32-bit)
-      shell: pwsh
-      working-directory: ${{ env.SCRIPTS_PATH }}
-      run: |
-        $CurrentFile = "${{ env.RELATIVE_PATH }}\resource\plugins\lv_icon.lvlibp"
-        & ".\powershell\Rename-File.ps1" -CurrentFilename $CurrentFile -NewFilename "lv_icon_x86.lvlibp"
+      - name: Rename File After Build 2021 (32-bit)
+        shell: pwsh
+        working-directory: ${{ env.SCRIPTS_PATH }}
+        run: |
+          $CurrentFile = "${{ env.RELATIVE_PATH }}\resource\plugins\lv_icon.lvlibp"
+          .\powershell\Rename-File.ps1 -CurrentFilename $CurrentFile -NewFilename "lv_icon_x86.lvlibp"
 
-    - name: Apply Dependencies 2021 (64-bit)
-      shell: pwsh
-      working-directory: ${{ env.SCRIPTS_PATH }}
-      run: |
-        & ".\powershell\Applyvipc.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 64 -RelativePath "${{ env.RELATIVE_PATH }}" -VIPCPath "Tooling\deployment\Dependencies.vipc" -VIP_LVVersion 2021
+      - name: Apply Dependencies 2021 (64-bit)
+        shell: pwsh
+        working-directory: ${{ env.SCRIPTS_PATH }}
+        run: |
+          .\powershell\Applyvipc.ps1 -MinimumSupportedLVVersion 2021 -SupportedBitness 64 -RelativePath "${{ env.RELATIVE_PATH }}" -VIPCPath "Tooling\deployment\Dependencies.vipc" -VIP_LVVersion 2021
 
-    - name: Run Unit Tests 2021 (64-bit)
-      shell: pwsh
-      working-directory: ${{ env.SCRIPTS_PATH }}
-      run: |
-        & ".\powershell\RunUnitTests.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 64 -RelativePath "${{ env.RELATIVE_PATH }}"
+      - name: Run Unit Tests 2021 (64-bit)
+        shell: pwsh
+        working-directory: ${{ env.SCRIPTS_PATH }}
+        run: |
+          .\powershell\RunUnitTests.ps1 -MinimumSupportedLVVersion 2021 -SupportedBitness 64 -RelativePath "${{ env.RELATIVE_PATH }}"
 
-    - name: Build LV Library 2021 (64-bit)
-      shell: pwsh
-      working-directory: ${{ env.SCRIPTS_PATH }}
-      run: |
-        & ".\powershell\Build_lvlibp.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 64 -RelativePath "${{ env.RELATIVE_PATH }}"
+      - name: Build LV Library 2021 (64-bit)
+        shell: pwsh
+        working-directory: ${{ env.SCRIPTS_PATH }}
+        run: |
+          .\powershell\Build_lvlibp.ps1 -MinimumSupportedLVVersion 2021 -SupportedBitness 64 -RelativePath "${{ env.RELATIVE_PATH }}"
 
-    - name: Rename File After Build 2021 (64-bit)
-      shell: pwsh
-      working-directory: ${{ env.SCRIPTS_PATH }}
-      run: |
-        $CurrentFile = "${{ env.RELATIVE_PATH }}\resource\plugins\lv_icon.lvlibp"
-        & ".\powershell\Rename-File.ps1" -CurrentFilename $CurrentFile -NewFilename "lv_icon_x64.lvlibp"
+      - name: Rename File After Build 2021 (64-bit)
+        shell: pwsh
+        working-directory: ${{ env.SCRIPTS_PATH }}
+        run: |
+          $CurrentFile = "${{ env.RELATIVE_PATH }}\resource\plugins\lv_icon.lvlibp"
+          .\powershell\Rename-File.ps1 -CurrentFilename $CurrentFile -NewFilename "lv_icon_x64.lvlibp"
 
-    - name: Build VI Package 2021 (64-bit)
-      shell: pwsh
-      working-directory: ${{ env.SCRIPTS_PATH }}
-      run: |
-        & ".\powershell\build_vip.ps1" -SupportedBitness 64 -RelativePath "${{ env.RELATIVE_PATH }}" -VIPBPath "Tooling\deployment\NI Icon editor.vipb" -VIP_LVVersion 2021 -MinimumSupportedLVVersion 2021
+      - name: Build VI Package 2021 (64-bit)
+        shell: pwsh
+        working-directory: ${{ env.SCRIPTS_PATH }}
+        run: |
+          .\powershell\build_vip.ps1 -SupportedBitness 64 -RelativePath "${{ env.RELATIVE_PATH }}" -VIPBPath "Tooling\deployment\NI Icon editor.vipb" -VIP_LVVersion 2021 -MinimumSupportedLVVersion 2021
 
-    - name: Close LabVIEW 2021 (64-bit)
-      shell: pwsh
-      working-directory: ${{ env.SCRIPTS_PATH }}
-      run: |
-        & ".\powershell\Close_LabVIEW.ps1" -MinimumSupportedLVVersion 2021 -SupportedBitness 64
+      - name: Close LabVIEW 2021 (64-bit)
+        shell: pwsh
+        working-directory: ${{ env.SCRIPTS_PATH }}
+        run: |
+          .\powershell\Close_LabVIEW.ps1 -MinimumSupportedLVVersion 2021 -SupportedBitness 64
