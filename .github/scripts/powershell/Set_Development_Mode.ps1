@@ -24,7 +24,7 @@ try {
     .\AddTokenToLabVIEW.ps1 -MinimumSupportedLVVersion 2021 -SupportedBitness 32 -RelativePath "$RelativePath"
     
     Write-Debug "Preparing LabVIEW source (32-bit)"
-    .\Prepare_LabVIEW_source.ps1 -MinimumSupportedLVVersion 2021 -SupportedBitness 32 -RelativePath "$RelativePath" -LabVIEW_Project #"lv_icon_editor" -Build_Spec "Editor Packed Library"
+    .\Prepare_LabVIEW_source.ps1 -MinimumSupportedLVVersion 2021 -SupportedBitness 32 -RelativePath "$RelativePath" -LabVIEW_Project "lv_icon_editor" -Build_Spec "Editor Packed Library"
     
     Write-Debug "Closing LabVIEW (32-bit)"
     .\Close_LabVIEW.ps1 -MinimumSupportedLVVersion 2021 -SupportedBitness 32
