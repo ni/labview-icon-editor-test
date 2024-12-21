@@ -17,6 +17,15 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
+      # Step to add C:\Program Files\G-CLI\bin to the PATH
+      - name: Add G-CLI to PATH
+        shell: pwsh
+        run: |
+          $env:PATH = "$env:PATH;C:\Program Files\G-CLI\bin"
+          Write-Host "Updated PATH: $env:PATH"
+          # Test invocation of g-cli
+          g-cli --help
+
       - name: Clean Up Old .lvlibp Files
         shell: pwsh
         run: |
