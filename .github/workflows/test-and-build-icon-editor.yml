@@ -29,16 +29,12 @@ jobs:
             Write-Host "Plugins folder not found. Skipping cleanup."
           }
 
-      # Ensure that Set_Development_Mode.ps1 sets $ErrorActionPreference = 'Stop'
-      # and handles errors appropriately so that if it fails, the rest of the steps won't run.
       - name: Set agent into development mode
         shell: pwsh
         working-directory: ${{ env.SCRIPTS_PATH }}
         run: |
           .\Set_Development_Mode.ps1 -RelativePath "${{ env.RELATIVE_PATH }}"
 
-      # Subsequent steps only run if the previous steps succeed.
-      # If any script fails, it will cause the job to fail and subsequent steps won't run.
       - name: Apply Dependencies 2021 (32-bit)
         shell: pwsh
         working-directory: ${{ env.SCRIPTS_PATH }}
