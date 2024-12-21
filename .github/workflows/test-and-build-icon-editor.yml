@@ -12,7 +12,7 @@ jobs:
     env:
       AgentWorkingFolder: ${{ github.workspace }}
       RELATIVE_PATH: ${{ github.workspace }}
-      SCRIPTS_PATH: ${{ github.workspace }}\.github\workflows\powershell
+      SCRIPTS_PATH: ${{ github.workspace }}\.github\scripts\powershell
 
     steps:
       - name: Checkout Repository
