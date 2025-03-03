@@ -46,7 +46,7 @@ Complete the following steps to distribute your custom icon editor to another ma
 ### Automated process 
 
 This automated build process will follow these steps: 
-
+test
 1. Apply the dependencies
 2. Run the unit test, 
 build the icon editor packed project library
