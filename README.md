@@ -77,4 +77,10 @@ An Azure Devops pipeline is used as an additional check to approve pull requests
 
 An example of a github action that can manually trigger a CI/CD workflow is located at "C:\labview-icon-editor\.github\workflows\Build VI packages.yml"
 
+### Pull Request Templates
+
+- [Bug Fix](https://github.com/ni/labview-icon-editor-test/compare/develop...feature-branch?expand=1&template=bug_fix.md)
+- [Feature Request](https://github.com/my-org/my-repo/compare/main...feature-branch?expand=1&template=feature_request.md)
+- [Documentation Update](https://github.com/my-org/my-repo/compare/main...feature-branch?expand=1&template=documentation_update.md)
+
 
