@@ -4,32 +4,43 @@ GitHub issue# linked to this PR
 # GitHub discussions related to this PR
 List the links of the GitHub discussions (if any) related to this PR
 
-# Self-review checklist
+# Checklists
 
-Please mark your pull request as a draft if any of the following condiditions is not met.
+The checklists on this PR ensure that the contributor's PR does not get declined by our build server. Please mark your PR as a draft if any of the following checks is missing.
 
 - [ ] I don't require assistance from NI to complete any of the following checks
-- [ ] I Pushed the feature branch assigned to this GitHub issue from onto my fork
-- [ ] I was able to build a ["Baseline VI Package"](https://github.com/ni/labview-icon-editor#baseline-VI-package) locally
+- [ ] I pushed the feature branch assigned to this GitHub issue from onto my fork
+- [ ] I was able to build a ["VI Package"](https://github.com/ni/labview-icon-editor#baseline-VI-package) locally
+- [ ] I followed the process of [installing the VI package](https://github.com/ni/labview-icon-editor#installing-VI-package)
+- [ ] NI has my contributors license agreement
 
-# Summary of the changes and related issue
+# Summary of changes
 
-# Screenshots
-Please also include screenshots and relevant motivation and context. 
+A concise overview of what is being added, modified, or fixed in the pull request. 
 
-- [ ] Dependencies
-List any dependencies that are required for this change.
+# Reason for change
 
-## Type of change
-- [ ] Bug fix (non-breaking change which fixes an issue)
-- [ ] New feature (non-breaking change which adds functionality)
-- [ ] Changes to GitHub actions
-- [ ] Changes to Powershell scripts
+Explain the problem or need that this pull request addresses, including any relevant background information. 
 
-## Documentation changes made to
+# Visual aids
 
-- [ ] LabVIEW Wiki
-- [ ] Readme.md
-- [ ] No documentation changes were necessary
+Include any visual aid that would help a reviewer get additional context.
+
+# Additional information
+
+Include any additional information that would help a reviewer get additional context.
+
+# Testing
+
+This section describes automated and manual tests for this new bugfix/feature
+
+## Manual tests
+
+Drescribe any manual tests 
+
+## Unit tests
+
+Name the new unit tests file names
+
 
 
