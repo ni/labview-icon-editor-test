@@ -1,7 +1,24 @@
-# Description
+# GitHub issue for the pull request
+GitHub issue# linked to this PR
 
-Please include a summary of the changes and the related issue. Please also include relevant motivation and context. List any dependencies that are required for this change.
-<input type="text" id="Description" name="Description"/>
+# GitHub discussions related to this PR
+List the links of the GitHub discussions (if any) related to this PR
+
+# Self-review checklist
+
+Please mark your pull request as a draft if any of the following condiditions is not met.
+
+- [ ] I don't require assistance from NI to complete any of the following checks
+- [ ] I Pushed the feature branch assigned to this GitHub issue from onto my fork
+- [ ] I was able to build a ["Baseline VI Package"](https://github.com/ni/labview-icon-editor#baseline-VI-package) locally
+
+# Summary of the changes and related issue
+
+# Screenshots
+Please also include screenshots and relevant motivation and context. 
+
+- [ ] Dependencies
+List any dependencies that are required for this change.
 
 ## Type of change
 - [ ] Bug fix (non-breaking change which fixes an issue)
@@ -15,7 +32,4 @@ Please include a summary of the changes and the related issue. Please also inclu
 - [ ] Readme.md
 - [ ] No documentation changes were necessary
 
-# Checklist:
 
-- [ ] Built a [Baseline VI Package locally](https://github.com/ni/labview-icon-editor#baseline-VI-package) locally
-- [ ] Built the icon editor via a GitHub action
