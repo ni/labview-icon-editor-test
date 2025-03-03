@@ -10,8 +10,9 @@ These checklists ensure that the contributor's PR meets our build server require
 
 - [ ] I do not require assistance from NI to complete any of the following checks.
 - [ ] I pushed the feature branch associated with this GitHub issue from my fork.
-- [ ] I was able to build a ["VI Package"](https://github.com/ni/labview-icon-editor#baseline-VI-package) locally.
-- [ ] I followed the process for [installing the VI package](https://github.com/ni/labview-icon-editor#installing-VI-package).
+- [ ] I built a VI Package using the [Powershell build tool](https://github.com/ni/labview-icon-editor#installing-VI-package).
+- [ ] I installed the VI Package produced by the Powershell build tool and tested my change.
+- [ ] I tested my chan [installing the VI package](https://github.com/ni/labview-icon-editor#installing-VI-package).
 - [ ] NI has my contributor license agreement.
 
 # Summary of Changes
