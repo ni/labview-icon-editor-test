@@ -1,46 +1,43 @@
-# GitHub issue for the pull request
-GitHub issue# linked to this PR
+# GitHub Issue for the Pull Request  
+Link to the relevant GitHub issue
 
-# GitHub discussions related to this PR
-List the links of the GitHub discussions (if any) related to this PR
+# GitHub Discussions Related to this Pull Request  
+List any GitHub discussion links related to this PR
 
 # Checklists
 
-The checklists on this PR ensure that the contributor's PR does not get declined by our build server. Please mark your PR as a draft if any of the following checks is missing.
+These checklists ensure that the contributor's PR meets our build server requirements.
 
-- [ ] I don't require assistance from NI to complete any of the following checks
-- [ ] I pushed the feature branch assigned to this GitHub issue from onto my fork
-- [ ] I was able to build a ["VI Package"](https://github.com/ni/labview-icon-editor#baseline-VI-package) locally
-- [ ] I followed the process of [installing the VI package](https://github.com/ni/labview-icon-editor#installing-VI-package)
-- [ ] NI has my contributors license agreement
+- [ ] I do not require assistance from NI to complete any of the following checks.
+- [ ] I pushed the feature branch associated with this GitHub issue from my fork.
+- [ ] I was able to build a ["VI Package"](https://github.com/ni/labview-icon-editor#baseline-VI-package) locally.
+- [ ] I followed the process for [installing the VI package](https://github.com/ni/labview-icon-editor#installing-VI-package).
+- [ ] NI has my contributor license agreement.
 
-# Summary of changes
+# Summary of Changes
 
-A concise overview of what is being added, modified, or fixed in the pull request. 
+Provide a concise overview of what is being added, modified, or fixed in this pull request.
 
-# Reason for change
+# Reason for Change
 
-Explain the problem or need that this pull request addresses, including any relevant background information. 
+Explain the problem or need addressed by this pull request, including any relevant background information.
 
-# Visual aids
+# Visual Aids
 
-Include any visual aid that would help a reviewer get additional context.
+Include any visual aids that would help the reviewer gain additional context.
 
-# Additional information
+# Additional Information
 
-Include any additional information that would help a reviewer get additional context.
+Include any further details that may assist the reviewer in understanding the context of this PR.
 
 # Testing
 
-This section describes automated and manual tests for this new bugfix/feature
+This section describes the automated and manual tests performed for this bugfix/feature.
 
-## Manual tests
+## Manual Tests
 
-Drescribe any manual tests 
+Describe any manual tests conducted.
 
-## Unit tests
+## Unit Tests
 
-Name the new unit tests file names
-
-
-
+List the names of the new unit test files.
