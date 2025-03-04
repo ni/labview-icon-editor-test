@@ -26,6 +26,13 @@ body:
     required: true
 - type: textarea
   attributes:
+    label: OS
+    description: What operating system are you using?
+    placeholder: 
+  validations:
+    required: true
+- type: textarea
+  attributes:
     label: Description / Summary
     description: A brief explanation of the bug and why it is problematic. Highlight the impact or severity if applicable.
     placeholder: Tell us what you see!
@@ -38,3 +45,39 @@ body:
     placeholder: 
   validations:
     required: true
+- type: textarea
+  attributes:
+    label: Expected Behavior
+    description: What you anticipated would happen if the software was functioning correctly. Helps distinguish the intended result from the bug.
+    placeholder: 
+  validations:
+    required: true
+- type: textarea
+  attributes:
+    label: Actual Behavior
+    description: The actual outcome you observed, including error messages or undesired results. Highlight differences between the actual and expected behavior.
+    placeholder: 
+  validations:
+    required: true
+- type: textarea
+  attributes:
+    label: Screenshots / Logs / Error Messages (if applicable)
+    description: Attach or paste screenshots, console logs, stack traces, or relevant error messages. This can be crucial for quickly identifying patterns or anomalies.
+    placeholder: 
+  validations:
+    required: false
+- type: textarea
+  attributes:
+    label: Possible Solution / Notes (optional, if you have ideas)
+    description: If you’ve done any initial debugging or have a hypothesis about the cause, include it. Be clear that this is your best guess, not a definitive answer.
+    placeholder: 
+  validations:
+    required: false
+- type: textarea
+  attributes:
+    label: Additional Context (optional)
+    description: Anything else relevant to the issue: Links to related issues. Workarounds you’ve tried. Changes you recently made that might have introduced the bug.
+    placeholder: 
+  validations:
+    required: false
+
