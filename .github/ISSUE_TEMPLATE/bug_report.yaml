@@ -7,13 +7,6 @@ body:
   attributes: 
     value: |
       Thanks for taking the time to fill out this bug report!
-- type: textarea
-  attributes:
-    label: What happened?
-    description: Also tell us, what did you expect to happen?
-    placeholder: Tell us what you see!
-  validations:
-    required: true
 - type: dropdown
   id: version
   attributes:
@@ -22,5 +15,29 @@ body:
       - The one the came with LabVIEW
       - Latest release from GitHub
       - Built from source
+  validations:
+    required: true
+- type: textarea
+  attributes:
+    label: LabVIEW Version
+    description: What LabVIEW version(s) have reported this issue?
+    placeholder: e.g. LabVIEW 2021 SP1
+  validations:
+    required: true
+- type: textarea
+  attributes:
+    label: Description / Summary
+    description: A brief explanation of the bug and why it is problematic. Highlight the impact or severity if applicable.
+    placeholder: Tell us what you see!
+  validations:
+    required: true
+- type: textarea
+  attributes:
+    label: Steps to Reproduce
+    description: A clear, step-by-step description of how someone else can trigger the bug. Number the steps and keep them precise and minimal.
+    placeholder: Example:
+Go to the login page
+Enter a username but leave the password field empty
+Click “Login”
   validations:
     required: true
