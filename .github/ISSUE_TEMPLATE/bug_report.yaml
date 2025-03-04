@@ -76,7 +76,7 @@ body:
 - type: textarea
   attributes:
     label: Additional Context (optional)
-    description: Anything else relevant to the issue: Links to related issues. Workarounds you’ve tried. Changes you recently made that might have introduced the bug.
+    description: Anything else relevant to the issue - Links to related issues, workarounds you’ve tried, changes you recently made that might have introduced the bug, etc.
     placeholder: 
   validations:
     required: false
