@@ -3,9 +3,10 @@
 name: Build and Test LabVIEW Project
 
 on:
-  push:
+  pull_request:
     branches:
-      - develop
+      - 'feature/*'
+    types: [opened, synchronize, reopened]
 
 jobs:
   build-and-test:
