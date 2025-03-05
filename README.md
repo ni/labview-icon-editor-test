@@ -38,7 +38,7 @@ Clone the repo into C:\, and apply the dependencies located on *Tooling\deployme
    ```bach
 .\DevelopmentMode.ps1 -RelativePath "C:\labview-icon-editor"
    ```
-   
+   e
 3. Open lv_icon_editor.lvproj in LabVIEW.
 4. The top-level VI is in the Project Explorer at __My Computer &#x00BB; resource/plugins &#x00BB; lv_icon.lvlib &#x00BB; lv_icon.vi__.
 
