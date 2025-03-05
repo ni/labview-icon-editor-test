@@ -1,4 +1,3 @@
-# .github/workflows/unit-test-and-build-vi-package.yml
 name: Build and Test LabVIEW Project
 
 on:
@@ -8,7 +7,7 @@ on:
       - 'develop'
     types: [opened, synchronize, reopened]
 
-  # Allow manual triggering
+  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
 jobs:
@@ -16,6 +15,7 @@ jobs:
     name: Build and Test the Icon Editor
     runs-on: [self-hosted, iconeditor]
 
+    # Keep only environment variables that do not rely on any step outputs
     env:
       build_id: ${{ github.run_number }}
       RelativePath: ${{ vars.AgentWorkingFolder }}
@@ -23,39 +23,39 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v1
+        uses: actions/checkout@v2
 
       - name: Get Build Revision
         id: get_revision
-        shell: bash
+        shell: pwsh
         run: |
           # Path to store the build revision counter
-          COUNTER_FILE="${GITHUB_WORKSPACE}/.github/buildCounter.txt"
-          echo "Counter file path: $COUNTER_FILE"
+          $COUNTER_FILE = "$env:GITHUB_WORKSPACE/.github/buildCounter.txt"
+          Write-Host "Counter file path: $COUNTER_FILE"
 
           # Initialize the counter file if it doesn't exist
-          if [ ! -f "$COUNTER_FILE" ]; then
-            echo "Counter file not found. Initializing to 1."
-            echo "1" > "$COUNTER_FILE"
-          fi
+          if (-Not (Test-Path $COUNTER_FILE)) {
+            Write-Host "Counter file not found. Initializing to 1."
+            "1" | Out-File $COUNTER_FILE
+          }
 
           # Read the current value
-          build_revision=$(cat "$COUNTER_FILE")
-          echo "Current build_revision: $build_revision"
+          $build_revision = Get-Content $COUNTER_FILE
+          Write-Host "Current build_revision: $build_revision"
 
           # Increment the counter
-          new_build_revision=$((build_revision + 1))
-          echo "New build_revision: $new_build_revision"
+          $new_build_revision = [int]$build_revision + 1
+          Write-Host "New build_revision: $new_build_revision"
 
-          # Save the new value back to the file
-          echo "$new_build_revision" > "$COUNTER_FILE"
+          # Save the new value to the file
+          $new_build_revision | Out-File $COUNTER_FILE
 
-          # Set the output variable
-          echo "::set-output name=build_revision::$new_build_revision"
+          # Set the output variable (using recommended method for GitHub Actions)
+          echo "build_revision=$new_build_revision" >> $env:GITHUB_OUTPUT
 
-          # For debugging
-          ls -la "${GITHUB_WORKSPACE}/.github"
-          cat "$COUNTER_FILE"
+          # Optional debugging
+          Get-ChildItem "$env:GITHUB_WORKSPACE/.github"
+          Get-Content $COUNTER_FILE
 
       - name: Set agent into development mode
         shell: pwsh
@@ -66,6 +66,7 @@ jobs:
       - name: Test and Build the Icon Editor
         shell: pwsh
         working-directory: ${{ env.RelativePathScripts }}
+        # Put the dynamic variables at the step level, after "get_revision" is available
         env:
           build_id: ${{ env.build_id }}
           build_revision: ${{ steps.get_revision.outputs.build_revision }}
@@ -80,6 +81,7 @@ jobs:
           .\RevertDevelopmentMode.ps1 -RelativePath "${{ env.RelativePath }}"
 
       - name: Commit and Push Build Counter
+        # Only commit on these two branches
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
