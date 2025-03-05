@@ -1,4 +1,4 @@
-# .github/workflows/build-and-test.yml
+# .github/workflows/unit-test-and-build.yml
 
 name: Build and Test LabVIEW Project
 
