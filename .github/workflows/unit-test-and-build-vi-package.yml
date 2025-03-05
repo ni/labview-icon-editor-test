@@ -1,5 +1,4 @@
 # .github/workflows/unit-test-and-build-vi-package.yml
-
 name: Build and Test LabVIEW Project
 
 on:
@@ -9,12 +8,14 @@ on:
       - 'develop'
     types: [opened, synchronize, reopened]
 
+  # Allow manual triggering
+  workflow_dispatch:
+
 jobs:
   build-and-test:
     name: Build and Test the Icon Editor
     runs-on: [self-hosted, iconeditor]
 
-    # Only keep environment variables that do not rely on step outputs
     env:
       build_id: ${{ github.run_number }}
       RelativePath: ${{ vars.AgentWorkingFolder }}
@@ -65,7 +66,6 @@ jobs:
       - name: Test and Build the Icon Editor
         shell: pwsh
         working-directory: ${{ env.RelativePathScripts }}
-        # Put the dynamic env variables at the step level
         env:
           build_id: ${{ env.build_id }}
           build_revision: ${{ steps.get_revision.outputs.build_revision }}
@@ -80,8 +80,6 @@ jobs:
           .\RevertDevelopmentMode.ps1 -RelativePath "${{ env.RelativePath }}"
 
       - name: Commit and Push Build Counter
-        # Because we reference steps.get_revision.outputs here, we can safely do so
-        # after the get_revision step has completed.
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
