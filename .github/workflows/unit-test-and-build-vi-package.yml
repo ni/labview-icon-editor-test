@@ -1,4 +1,4 @@
-name: Build the icon editor
+name: Run unit tests and build VI Package
 
 on:
   pull_request:
@@ -15,7 +15,6 @@ jobs:
     name: Build the icon editor
     runs-on: [self-hosted, iconeditor]
 
-    # Keep only environment variables that do not rely on any step outputs
     env:
       build_id: ${{ github.run_number }}
       RelativePath: ${{ vars.AgentWorkingFolder }}
@@ -50,7 +49,7 @@ jobs:
           # Save the new value to the file
           $new_build_revision | Out-File $COUNTER_FILE
 
-          # Set the output variable (using recommended method for GitHub Actions)
+          # Set the output variable for GitHub Actions
           echo "build_revision=$new_build_revision" >> $env:GITHUB_OUTPUT
 
           # Optional debugging
@@ -66,7 +65,6 @@ jobs:
       - name: Test and Build the Icon Editor
         shell: pwsh
         working-directory: ${{ env.RelativePathScripts }}
-        # Put the dynamic variables at the step level, after "get_revision" is available
         env:
           build_id: ${{ env.build_id }}
           build_revision: ${{ steps.get_revision.outputs.build_revision }}
@@ -80,8 +78,15 @@ jobs:
         run: |
           .\RevertDevelopmentMode.ps1 -RelativePath "${{ env.RelativePath }}"
 
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: vi-package
+          # Since your workflow base directory is $GITHUB_WORKSPACE,
+          # simply reference the relative path. Use quotes because of the space.
+          path: 'builds/VI Package'
+
       - name: Commit and Push Build Counter
-        # Only commit on these two branches
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
