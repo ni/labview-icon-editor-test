@@ -86,9 +86,9 @@ jobs:
           # simply reference the relative path. Use quotes because of the space.
           path: 'builds/VI Package'
 
-      - name: Commit and Push Build Counter
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
-        uses: stefanzweifel/git-auto-commit-action@v4
-        with:
-          commit_message: 'Increment build revision to ${{ steps.get_revision.outputs.build_revision }}'
-          file_pattern: '.github/buildCounter.txt'
+#      - name: Commit and Push Build Counter
+#        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+#        uses: stefanzweifel/git-auto-commit-action@v4
+#        with:
+#          commit_message: 'Increment build revision to ${{ steps.get_revision.outputs.build_revision }}'
+#          file_pattern: '.github/buildCounter.txt'
