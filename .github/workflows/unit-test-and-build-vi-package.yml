@@ -19,7 +19,7 @@ jobs:
     env:
       build_id: ${{ github.run_number }}
       RelativePath: ${{ vars.AgentWorkingFolder }}
-      RelativePathScripts: ${{ vars.path_to_powershell_scripts }}
+      RelativePathScripts: ${{ vars.AgentWorkingFolder }}\pipeline\scripts
 
     steps:
       - name: Checkout code
