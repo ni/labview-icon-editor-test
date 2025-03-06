@@ -15,6 +15,11 @@ jobs:
     name: Build the icon editor
     runs-on: [self-hosted, iconeditor]
 
+    env:
+      build_id: ${{ github.run_number }}
+      RelativePath: ${{ vars.AgentWorkingFolder }}
+      RelativePathScripts: ${{ vars.AgentWorkingFolder }}\pipeline\scripts
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -47,30 +52,38 @@ jobs:
           # Set the output variable for GitHub Actions
           echo "build_revision=$new_build_revision" >> $env:GITHUB_OUTPUT
 
+          # Optional debugging
+          Get-ChildItem "$env:GITHUB_WORKSPACE/.github"
+          Get-Content $COUNTER_FILE
+
       - name: Set agent into development mode
         shell: pwsh
+        working-directory: ${{ env.RelativePathScripts }}
         run: |
-          .\pipeline\scripts\Set_Development_Mode.ps1
+          .\Set_Development_Mode.ps1 -RelativePath "${{ env.RelativePath }}"
 
       - name: Test and Build the Icon Editor
         shell: pwsh
-        # Put the dynamic variables at the step level, after "get_revision" is available
+        working-directory: ${{ env.RelativePathScripts }}
         env:
-          build_id: ${{ github.run_number }}
+          build_id: ${{ env.build_id }}
           build_revision: ${{ steps.get_revision.outputs.build_revision }}
-          build_version: 1.0.${{ github.run_number }}.${{ steps.get_revision.outputs.build_revision }}
+          build_version: 1.0.${{ env.build_id }}.${{ steps.get_revision.outputs.build_revision }}
         run: |
-          .\pipeline\scripts\Build.ps1 -build_version $env:build_version
+          .\Build.ps1 -RelativePath "${{ env.RelativePath }}" -AbsolutePathScripts "${{ env.RelativePathScripts }}"
 
       - name: Restore agent from development mode
         shell: pwsh
+        working-directory: ${{ env.RelativePathScripts }}
         run: |
-          .\pipeline\scripts\RevertDevelopmentMode.ps1
+          .\RevertDevelopmentMode.ps1 -RelativePath "${{ env.RelativePath }}"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: vi-package
+          # Since your workflow base directory is $GITHUB_WORKSPACE,
+          # simply reference the relative path. Use quotes because of the space.
           path: 'builds/VI Package'
 
       - name: Commit and Push Build Counter
