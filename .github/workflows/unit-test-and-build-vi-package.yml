@@ -57,11 +57,11 @@ jobs:
           Get-ChildItem "$env:GITHUB_WORKSPACE/.github"
           Get-Content $COUNTER_FILE
 
-#      - name: Set agent into development mode
-#        shell: pwsh
-#        working-directory: ${{ env.RelativePathScripts }}
-#        run: |
-#          .\Set_Development_Mode.ps1 -RelativePath "${{ env.RelativePath }}"
+      - name: Set agent into development mode
+        shell: pwsh
+        working-directory: ${{ env.RelativePathScripts }}
+        run: |
+          .\Set_Development_Mode.ps1 -RelativePath "${{ env.RelativePath }}"
 
       - name: Test and Build the Icon Editor
         shell: pwsh
@@ -74,11 +74,11 @@ jobs:
         run: |
           .\Build.ps1 -RelativePath "${{ env.RelativePath }}" -AbsolutePathScripts "${{ env.RelativePathScripts }}"
 
-#      - name: Restore agent from development mode
-#        shell: pwsh
-#        working-directory: ${{ env.RelativePathScripts }}
-#        run: |
-#          .\RevertDevelopmentMode.ps1 -RelativePath "${{ env.RelativePath }}"
+      - name: Restore agent from development mode
+        shell: pwsh
+        working-directory: ${{ env.RelativePathScripts }}
+        run: |
+          .\RevertDevelopmentMode.ps1 -RelativePath "${{ env.RelativePath }}"
 
       - name: Commit and Push Build Counter
         # Only commit on these two branches
