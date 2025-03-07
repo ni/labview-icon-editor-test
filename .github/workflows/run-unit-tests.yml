@@ -1,4 +1,4 @@
-name: Build the icon editor
+name: Run unit tests
 
 on:
   pull_request:
@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-test:
+  run-unit-tests:
     environment: GlobalBuildEnv 
     name: Build the icon editor
     runs-on: [self-hosted, iconeditor]
@@ -60,8 +60,9 @@ jobs:
           # Optional debugging
           Get-ChildItem "$env:GITHUB_WORKSPACE/.github"
           Get-Content $COUNTER_FILE
+          
 
-      - name: Test and Build the Icon Editor
+      - name: Run unit tests
         shell: pwsh
         working-directory: ${{ env.RelativePathScripts }}
         env:
@@ -69,7 +70,7 @@ jobs:
           build_revision: ${{ steps.get_revision.outputs.build_revision }}
           build_version: 1.0.${{ env.build_id }}.${{ steps.get_revision.outputs.build_revision }}
         run: |
-          .\Build.ps1 -RelativePath "${{ env.RelativePath }}" -AbsolutePathScripts "${{ env.RelativePathScripts }}"
+          .\unit_tests.ps1 -RelativePath "${{ env.RelativePath }}" -AbsolutePathScripts "${{ env.RelativePathScripts }}"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
