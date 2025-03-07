@@ -7,7 +7,7 @@ on:
 jobs:
   build-and-test:
     environment: GlobalBuildEnv 
-    name: Build the icon editor
+    name: Enable runner to edit the icon editor
     runs-on: [self-hosted, iconeditor]
     permissions:
       # Make sure 'actions: write' or 'repository' scopes are included
