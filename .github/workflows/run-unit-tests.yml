@@ -27,7 +27,7 @@ on:
 jobs:
   run-unit-tests:
     environment: GlobalBuildEnv 
-    name: Build the icon editor
+    name: Run unit tests
     runs-on: [self-hosted, iconeditor]
     permissions:
       # Make sure 'actions: write' or 'repository' scopes are included
