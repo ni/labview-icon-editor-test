@@ -1,4 +1,4 @@
-name: Build the icon editor
+name: Build VI Package
 
 on:
   pull_request:
