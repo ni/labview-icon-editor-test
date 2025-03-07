@@ -63,7 +63,7 @@ jobs:
           build_revision: ${{ steps.get_revision.outputs.build_revision }}
           build_version: 1.0.${{ env.build_id }}.${{ steps.get_revision.outputs.build_revision }}
         run: |
-          .\RevertDevelopmentMode.ps1 -RelativePath "${{ env.RelativePath }}" -AbsolutePathScripts "${{ env.RelativePathScripts }}"
+          .\RevertDevelopmentMode.ps1 -RelativePath "${{ env.RelativePath }}"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
