@@ -6,89 +6,213 @@ on:
       - 'feature/*'
       - 'develop'
     types: [opened, synchronize, reopened]
-
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
+
+###########################################################
+# Single concurrency group for all branches:
+# - Only one run can happen at any time across the entire repo
+# - If the branch is 'develop', do not cancel in-progress
+# - If the branch is something else, cancel older runs
+###########################################################
+concurrency:
+  group: global-build
+  cancel-in-progress: ${{ !endsWith(github.ref, '/develop') }}
 
 jobs:
   build-and-test:
-    name: Build the icon editor
     runs-on: [self-hosted, iconeditor]
 
-    env:
-      build_id: ${{ github.run_number }}
-      RelativePath: ${{ vars.AgentWorkingFolder }}
-      RelativePathScripts: ${{ vars.AgentWorkingFolder }}\pipeline\scripts
+    # We need at least 'actions: write' to patch environment variables, 
+    # or 'repo' scope if using a PAT.
+    permissions:
+      contents: write
+      actions: write
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Get Build Revision
-        id: get_revision
+      ########################################################
+      # 1) Retrieve the current JSON from GitHub Environment
+      ########################################################
+      - name: Get Build Info from Environment
+        id: get_build_info
         shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Path to store the build revision counter
-          $COUNTER_FILE = "$env:GITHUB_WORKSPACE/.github/buildCounter.txt"
-          Write-Host "Counter file path: $COUNTER_FILE"
+          $ErrorActionPreference = "Stop"
 
-          # Initialize the counter file if it doesn't exist
-          if (-Not (Test-Path $COUNTER_FILE)) {
-            Write-Host "Counter file not found. Initializing to 1."
-            "1" | Out-File $COUNTER_FILE
+          # Configure these names to match how your repo is set up
+          $repoOwnerRepo = "${{ github.repository }}"       # e.g. "MyOrg/MyRepo"
+          $environmentName = "GlobalBuildEnv"               # e.g. The environment name from your Settings
+          $variableName = "ICON_BUILD_INFO"                 # The variable containing JSON
+
+          $headers = @{ "Authorization" = "Bearer $env:GITHUB_TOKEN" }
+          $url = "https://api.github.com/repos/$repoOwnerRepo/environments/$environmentName"
+
+          Write-Host "Fetching environment: $environmentName"
+
+          # 1. Retrieve the environment
+          $response = Invoke-RestMethod -Uri $url -Method GET -Headers $headers
+
+          # The environment JSON does NOT directly list variables in older API versions,
+          # it may provide a 'node_id' or you'll need the new v3 or v4 endpoints for environment variables.
+          #
+          # If using the new "Variables" endpoints, you do:
+          #   GET /repos/{owner}/{repo}/environments/{environment_name}/variables
+          #
+          # For example:
+          # $varUrl = "https://api.github.com/repos/$repoOwnerRepo/environments/$environmentName/variables"
+          # $varResponse = Invoke-RestMethod -Uri $varUrl -Method GET -Headers $headers
+          #
+          # Then find the variable by name:
+          # $myVar = $varResponse.variables | Where-Object { $_.name -eq $variableName }
+          #
+          # PSEUDO:
+          # if (-not $myVar) {
+          #   Write-Host "Variable '$variableName' not found."
+          #   exit 1
+          # }
+          # $currentJson = $myVar.value
+          #
+          # For demonstration, let's pretend we have it in $myVar.value:
+
+          # In older APIs, you might have to do additional calls.
+          # Below is just a placeholder that you'll adapt to the new Variables endpoint:
+
+          Write-Host "Attempting to fetch variables from the new endpoint..."
+          $varUrl = "https://api.github.com/repos/$repoOwnerRepo/environments/$environmentName/variables"
+          $varResponse = Invoke-RestMethod -Uri $varUrl -Method GET -Headers $headers
+          $myVar = $varResponse.variables | Where-Object { $_.name -eq $variableName }
+          if (-not $myVar) {
+            Write-Host "Could not find environment variable named '$variableName'."
+            exit 1
           }
 
-          # Read the current value
-          $build_revision = Get-Content $COUNTER_FILE
-          Write-Host "Current build_revision: $build_revision"
+          $currentJson = $myVar.value
 
-          # Increment the counter
-          $new_build_revision = [int]$build_revision + 1
-          Write-Host "New build_revision: $new_build_revision"
+          Write-Host "Current JSON from environment variable '$variableName':"
+          Write-Host $currentJson
 
-          # Save the new value to the file
-          $new_build_revision | Out-File $COUNTER_FILE
+          # 2. Parse JSON
+          $buildInfo = $null
+          try {
+            $buildInfo = $currentJson | ConvertFrom-Json
+          } catch {
+            Write-Host "ERROR: Unable to parse JSON. Is it valid?"
+            exit 1
+          }
 
-          # Set the output variable for GitHub Actions
-          echo "build_revision=$new_build_revision" >> $env:GITHUB_OUTPUT
+          # 3. Output each field so we can use them later
+          echo "major=$($buildInfo.major)" >> $env:GITHUB_OUTPUT
+          echo "minor=$($buildInfo.minor)" >> $env:GITHUB_OUTPUT
+          echo "patch=$($buildInfo.patch)" >> $env:GITHUB_OUTPUT
+          echo "buildCounter=$($buildInfo.buildCounter)" >> $env:GITHUB_OUTPUT
 
-          # Optional debugging
-          Get-ChildItem "$env:GITHUB_WORKSPACE/.github"
-          Get-Content $COUNTER_FILE
 
-#      - name: Set agent into development mode
-#        shell: pwsh
-#        working-directory: ${{ env.RelativePathScripts }}
-#        run: |
-#          .\Set_Development_Mode.ps1 -RelativePath "${{ env.RelativePath }}"
-
-      - name: Test and Build the Icon Editor
+      ########################################################
+      # 2) Increment the build counter (or other fields)
+      ########################################################
+      - name: Increment Build Counter
+        id: increment_counter
         shell: pwsh
-        working-directory: ${{ env.RelativePathScripts }}
-        env:
-          build_id: ${{ env.build_id }}
-          build_revision: ${{ steps.get_revision.outputs.build_revision }}
-          build_version: 1.0.${{ env.build_id }}.${{ steps.get_revision.outputs.build_revision }}
         run: |
-          .\Build.ps1 -RelativePath "${{ env.RelativePath }}" -AbsolutePathScripts "${{ env.RelativePathScripts }}"
+          $ErrorActionPreference = "Stop"
 
-#      - name: Restore agent from development mode
-#        shell: pwsh
-#        working-directory: ${{ env.RelativePathScripts }}
-#        run: |
-#          .\RevertDevelopmentMode.ps1 -RelativePath "${{ env.RelativePath }}"
+          $major = ${{ steps.get_build_info.outputs.major }}
+          $minor = ${{ steps.get_build_info.outputs.minor }}
+          $patch = ${{ steps.get_build_info.outputs.patch }}
+          $buildCounter = ${{ steps.get_build_info.outputs.buildCounter }}
 
+          $newBuildCounter = [int]$buildCounter + 1
+
+          # If you also wanted to bump major/minor/patch from workflow inputs, you'd do so here.
+          # e.g. if(${{ inputs.bumpMajor }} -eq 'true') { $major++ }
+
+          Write-Host "Old buildCounter = $buildCounter"
+          Write-Host "New buildCounter = $newBuildCounter"
+
+          echo "newMajor=$major" >> $env:GITHUB_OUTPUT
+          echo "newMinor=$minor" >> $env:GITHUB_OUTPUT
+          echo "newPatch=$patch" >> $env:GITHUB_OUTPUT
+          echo "newBuildCounter=$newBuildCounter" >> $env:GITHUB_OUTPUT
+
+      ########################################################
+      # 3) Update Environment variable with the new JSON
+      ########################################################
+      - name: Update Build Info in Environment
+        id: update_build_info
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $repoOwnerRepo   = "${{ github.repository }}"
+          $environmentName = "GlobalBuildEnv"
+          $variableName    = "ICON_BUILD_INFO"
+
+          $major        = ${{ steps.increment_counter.outputs.newMajor }}
+          $minor        = ${{ steps.increment_counter.outputs.newMinor }}
+          $patch        = ${{ steps.increment_counter.outputs.newPatch }}
+          $buildCounter = ${{ steps.increment_counter.outputs.newBuildCounter }}
+
+          # Construct updated JSON
+          $buildInfoObj = [PSCustomObject]@{
+            major        = $major
+            minor        = $minor
+            patch        = $patch
+            buildCounter = $buildCounter
+          }
+          $newJson = $buildInfoObj | ConvertTo-Json -Depth 10
+          Write-Host "Updated JSON:"
+          Write-Host $newJson
+
+          # Use the new Variables endpoint
+          #   PATCH /repos/{owner}/{repo}/environments/{environment_name}/variables/{name}
+          #
+          # Or if that isn't available, do a combination of "delete + create" calls.
+          #
+          # Example using the new endpoints:
+          $varUrl = "https://api.github.com/repos/$repoOwnerRepo/environments/$environmentName/variables/$($variableName)"
+          $headers = @{ "Authorization" = "Bearer $env:GITHUB_TOKEN" }
+          $body = @{
+            name  = $variableName
+            value = $newJson
+          } | ConvertTo-Json
+
+          Write-Host "Sending PATCH request to $varUrl with body:"
+          Write-Host $body
+
+          $null = Invoke-RestMethod -Uri $varUrl -Method PATCH -Headers $headers -Body $body
+          Write-Host "Environment variable updated successfully."
+
+      ########################################################
+      # 4) Build and Test using the final version
+      ########################################################
+      - name: Build the Icon Editor
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $major        = ${{ steps.increment_counter.outputs.newMajor }}
+          $minor        = ${{ steps.increment_counter.outputs.newMinor }}
+          $patch        = ${{ steps.increment_counter.outputs.newPatch }}
+          $buildCounter = ${{ steps.increment_counter.outputs.newBuildCounter }}
+
+          # Final version: major.minor.patch.buildCounter
+          $buildVersion = "$major.$minor.$patch.$buildCounter"
+
+          Write-Host "Building with version: $buildVersion"
+          # e.g. pwsh .\Build.ps1 -Version $buildVersion
+          # ... your build logic ...
+
+      ########################################################
+      # 5) Upload your final build artifact
+      ########################################################
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: vi-package
-          # Since your workflow base directory is $GITHUB_WORKSPACE,
-          # simply reference the relative path. Use quotes because of the space.
           path: 'builds/VI Package'
-
-#      - name: Commit and Push Build Counter
-#        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
-#        uses: stefanzweifel/git-auto-commit-action@v4
-#        with:
-#          commit_message: 'Increment build revision to ${{ steps.get_revision.outputs.build_revision }}'
-#          file_pattern: '.github/buildCounter.txt'
