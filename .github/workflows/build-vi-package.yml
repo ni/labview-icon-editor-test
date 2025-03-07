@@ -31,7 +31,7 @@ concurrency:
 jobs:
   build-vi-package:
     environment: GlobalBuildEnv 
-    name: Build the icon editor
+    name: Build VI Package
     runs-on: [self-hosted, iconeditor]
     permissions:
       # Make sure 'actions: write' or 'repository' scopes are included
