@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-test:
+  build-vi-package:
     environment: GlobalBuildEnv 
     name: Build the icon editor
     runs-on: [self-hosted, iconeditor]
@@ -62,7 +62,7 @@ jobs:
           Get-Content $COUNTER_FILE
           
 
-      - name: Test and Build the Icon Editor
+      - name: Build the icon editor VI package
         shell: pwsh
         working-directory: ${{ env.RelativePathScripts }}
         env:

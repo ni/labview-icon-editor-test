@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-test:
+  disable-runner-development-mode:
     environment: GlobalBuildEnv 
     name: Restore runner to normal mode
     runs-on: [self-hosted, iconeditor]
