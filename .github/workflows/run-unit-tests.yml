@@ -3,9 +3,23 @@ name: Run unit tests
 on:
   pull_request:
     branches:
-      - 'feature/*'
-      - 'develop'
-    types: [opened, synchronize, reopened]
+      - main
+      - develop
+      - release/*
+      - hotfix/*
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+  push:
+    branches:
+      - main
+      - develop
+      - release/*
+      - hotfix/*
+      - feature/*
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
