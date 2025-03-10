@@ -15,50 +15,36 @@ body:
       - The one the came with LabVIEW
       - Latest release from GitHub
       - Built from source
+      - Does not apply to this issue
   validations:
     required: true
 - type: textarea
   attributes:
-    label: LabVIEW Version
-    description: What LabVIEW version(s) have reported this issue?
-    placeholder: e.g. LabVIEW 2021 SP1
-  validations:
-    required: true
-- type: textarea
-  attributes:
-    label: OS
-    description: What operating system are you using?
-    placeholder: 
-  validations:
-    required: true
-- type: textarea
-  attributes:
-    label: Description / Summary
+    label: Summary
     description: A brief explanation of the bug and why it is problematic. Highlight the impact or severity if applicable.
     placeholder: Tell us what you see!
   validations:
-    required: true
 - type: textarea
   attributes:
     label: Steps to Reproduce
     description: A clear, step-by-step description of how someone else can trigger the bug. Number the steps and keep them precise and minimal.
     placeholder: 
   validations:
-    required: true
+    required: false
 - type: textarea
   attributes:
     label: Expected Behavior
     description: What you anticipated would happen if the software was functioning correctly. Helps distinguish the intended result from the bug.
     placeholder: 
   validations:
-    required: true
+    required: false
 - type: textarea
   attributes:
     label: Actual Behavior
     description: The actual outcome you observed, including error messages or undesired results. Highlight differences between the actual and expected behavior.
     placeholder: 
   validations:
-    required: true
+    required: false
 - type: textarea
   attributes:
     label: Screenshots / Logs / Error Messages (if applicable)
