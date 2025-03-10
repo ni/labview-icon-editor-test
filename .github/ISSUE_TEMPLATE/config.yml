@@ -1,11 +1,11 @@
-blank_issues_enabled: false
+blank_issues_enabled: true
 contact_links:
   - name: ❓ General Question
     url: https://discord.gg/q4d3ggrFVA
     about: "If you have a general question, please ask it on our Discord server." 
   - name: 🚀 Feature Requests
-    url: feature_request.yml
+    url: feature_request.yaml
     about: "Suggest a new feature or enhancement."
   - name: 🐞 Bug Reports
-    url: bug_report.yml
+    url: bug_report.yaml
     about: "Report a bug in the project."
