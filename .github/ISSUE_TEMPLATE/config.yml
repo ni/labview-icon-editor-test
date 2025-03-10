@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: ❓ General Question
+    url: https://github.com/your-repo/discussions
+    about: "If you have a general question, please ask it in Discussions."
+  - name: 🚀 Feature Requests
+    url: https://github.com/your-repo/issues/new?template=feature_request.yml
+    about: "Suggest a new feature or enhancement."
+  - name: 🐞 Bug Reports
+    url: https://github.com/your-repo/issues/new?template=bug_report.yml
+    about: "Report a bug in the project."
