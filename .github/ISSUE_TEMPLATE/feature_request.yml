@@ -11,8 +11,8 @@ body:
   - type: textarea
     attributes:
       label: Summary / Description
-      description: A short explanation of the feature you’re requesting. Focus on what the feature is and the problem it addresses.
-      placeholder:
+      description: A short explanation of the requested feature. Focus on what the feature is and the problem it addresses.
+      placeholder: "Enter text here"
     validations:
       required: true
 
@@ -35,7 +35,7 @@ body:
   - type: textarea
     attributes:
       label: Alternatives / Workarounds
-      description: Describe any other solutions or workarounds you’ve tried or considered, and why they aren’t sufficient or optimal.
+      description: Describe any other solutions or workarounds you have tried or considered, and why they were not sufficient or optimal.
       placeholder:
     validations:
       required: false
