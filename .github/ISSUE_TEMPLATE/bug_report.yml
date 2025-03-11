@@ -6,7 +6,7 @@ body:
 - type: markdown
   attributes: 
     value: |
-      * IMPORTANT: Before creating an issue, start the discussion about a possible bug, improvement, or new feature in our [Discord Server](https://discord.gg/q4d3ggrFVA)
+      * IMPORTANT: Before creating an issue, start the discussion about a possible bug in our [Discord Server](https://discord.gg/q4d3ggrFVA)
 
 - type: dropdown
   id: version
