@@ -11,11 +11,11 @@ contact_links:
 
 issue_templates:
   - name: 🐞 Bug Report
-    path: bug_report.yml
+    path: bug_report.yaml
     description: "Report a reproducible issue."
     labels: ["bug"]
     
   - name: 🚀 Feature Request
-    path: feature_request.yml
+    path: feature_request.yaml
     description: "Suggest a new feature or enhancement."
     labels: ["enhancement"]
