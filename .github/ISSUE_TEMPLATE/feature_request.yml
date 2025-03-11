@@ -1,13 +1,13 @@
 name: Feature request
 description: Tell us about a new feature
-title: "a"
+title: "[Feature] "
 labels: "Enhancement"
 body: 
 
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to fill out this feature request
+      * IMPORTANT: Before creating an issue, start the discussion about a possible new feature on our [Discord Server](https://discord.gg/q4d3ggrFVA)
 
   - type: textarea
     attributes:
