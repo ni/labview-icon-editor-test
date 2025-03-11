@@ -14,6 +14,7 @@ issue_templates:
     path: bug_report.yml
     description: "Report a reproducible issue."
     labels: ["bug"]
+    
   - name: 🚀 Feature Request
     path: feature_request.yml
     description: "Suggest a new feature or enhancement."
