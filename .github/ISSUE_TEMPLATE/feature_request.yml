@@ -34,7 +34,7 @@ body:
 
   - type: textarea
     attributes:
-      label: Alternatives / Workarounds
+      label: Alternatives / Workarounds (optional)
       description: Describe any other solutions or workarounds you have tried or considered, and why they were not sufficient or optimal.
       placeholder: "List alternative approaches and why they don’t fully solve the problem."
     validations:
