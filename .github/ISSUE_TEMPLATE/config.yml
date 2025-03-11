@@ -10,6 +10,7 @@ contact_links:
     about: "Check the documentation for common questions before opening an issue."
 
 issue_templates:
+
   - name: 🐞 Bug Report
     path: bug_report.yml
     description: "Report a reproducible issue."
