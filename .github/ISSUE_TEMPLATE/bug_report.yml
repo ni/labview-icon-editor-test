@@ -6,7 +6,8 @@ body:
 - type: markdown
   attributes: 
     value: |
-      Thanks for taking the time to fill out this bug report!
+      * IMPORTANT: Before creating an issue, start the discussion about a possible bug, improvement, or new feature in our [Discord Server](https://discord.gg/q4d3ggrFVA)
+
 - type: dropdown
   id: version
   attributes:
