@@ -13,7 +13,7 @@ body:
   attributes:
     label: What version of the icon editor are you using?
     options:
-      - The one the came with LabVIEW
+      - The one that came with LabVIEW
       - Latest release from GitHub
       - Built from source
       - Does not apply to this issue
