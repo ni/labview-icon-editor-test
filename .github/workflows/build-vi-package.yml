@@ -112,68 +112,100 @@ jobs:
       # 4) Parse latest version tag, apply major/minor/patch if found
       ########################################################################
       - name: Compute version string
-        id: next_version
-        shell: pwsh
-        env:
-          BUMP_TYPE: ${{ steps.bump_type.outputs.bump_type }}
-          BUILD_NUMBER: ${{ steps.inc_build.outputs.new_build_number }}
-        run: |
-          Write-Host "Bump type: $($env:BUMP_TYPE)"
-          Write-Host "Build number: $($env:BUILD_NUMBER)"
-
-          $latestTag = git describe --tags --abbrev=0 2>$null
-          if ([string]::IsNullOrEmpty($latestTag)) {
-            $baseMajor = 0
-            $baseMinor = 0
-            $basePatch = 0
+      id: next_version
+      shell: pwsh
+      env:
+        BUMP_TYPE: ${{ steps.bump_type.outputs.bump_type }}
+        BUILD_NUMBER: ${{ steps.inc_build.outputs.new_build_number }}
+      run: |
+        Write-Host "Bump type: $($env:BUMP_TYPE)"
+        Write-Host "Build number: $($env:BUILD_NUMBER)"
+    
+        # 1) Find the last stable tag
+        #    If no tags found, default to v0.0.0
+        $latestTag = git describe --tags --abbrev=0 2>$null
+        if ([string]::IsNullOrEmpty($latestTag)) {
+          $baseMajor = 0
+          $baseMinor = 0
+          $basePatch = 0
+        }
+        else {
+          # e.g. if $latestTag is v1.2.3-build45, remove the prefix and any -build
+          $tagNoPrefix = $latestTag.TrimStart('v')
+          $versionPart = $tagNoPrefix -replace '-build.*',''
+          $baseMajor, $baseMinor, $basePatch = $versionPart.Split('.')
+        }
+    
+        $newMajor = [int]$baseMajor
+        $newMinor = [int]$baseMinor
+        $newPatch = [int]$basePatch
+    
+        # 2) Apply label-based semantic bump: major, minor, patch, or none
+        switch ($env:BUMP_TYPE) {
+          'major' {
+            $newMajor++
+            $newMinor = 0
+            $newPatch = 0
           }
-          else {
-            $tagNoPrefix = $latestTag.TrimStart('v')
-            $versionPart = $tagNoPrefix -replace '-build.*',''
-            $baseMajor, $baseMinor, $basePatch = $versionPart.Split('.')
+          'minor' {
+            $newMinor++
+            $newPatch = 0
           }
-
-          $newMajor = [int]$baseMajor
-          $newMinor = [int]$baseMinor
-          $newPatch = [int]$basePatch
-
-          switch ($env:BUMP_TYPE) {
-            'major' {
-              $newMajor++
-              $newMinor = 0
-              $newPatch = 0
-            }
-            'minor' {
-              $newMinor++
-              $newPatch = 0
-            }
-            'patch' {
-              $newPatch++
-            }
-            'none' {
-              # do nothing
-            }
+          'patch' {
+            $newPatch++
           }
-
-          $branchName = $env:GITHUB_REF -split '/' | Select-Object -Last 1
-          $rcSuffix = ""
-          if ($branchName -like 'release/*') {
-            $commitsCount = git rev-list --count HEAD ^origin/develop 2>$null
-            if ([string]::IsNullOrEmpty($commitsCount)) { $commitsCount = 1 }
-            $rcSuffix = "rc.$commitsCount"
+          'none' {
+            # do nothing; rely on build number only
           }
-
-          if ([string]::IsNullOrEmpty($rcSuffix)) {
-            $version = "v$($newMajor).$($newMinor).$($newPatch)-build$($env:BUILD_NUMBER)"
-          } else {
-            $version = "v$($newMajor).$($newMinor).$($newPatch)-$rcSuffix-build$($env:BUILD_NUMBER)"
-          }
-
-          Write-Host "Computed version => $version"
-          "VERSION=$version"   | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          "MAJOR=$newMajor"    | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          "MINOR=$newMinor"    | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          "PATCH=$newPatch"    | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        }
+    
+        # 3) Check for ALPHA / BETA / RC suffix
+        #    We'll parse branch name to detect multiple channels.
+        $branchName = $env:GITHUB_REF -split '/' | Select-Object -Last 1
+        $preSuffix = ""
+    
+        # For example:
+        #   release-alpha/* => -alpha.<N>
+        #   release-beta/*  => -beta.<N>
+        #   release-rc/*    => -rc.<N>
+    
+        if ($branchName -like 'release-alpha/*') {
+          # Count commits or do something to produce alpha.<N>
+          $commitsCount = git rev-list --count HEAD 2>$null
+          if ([string]::IsNullOrEmpty($commitsCount)) { $commitsCount = 1 }
+          $preSuffix = "alpha.$commitsCount"
+        }
+        elseif ($branchName -like 'release-beta/*') {
+          $commitsCount = git rev-list --count HEAD 2>$null
+          if ([string]::IsNullOrEmpty($commitsCount)) { $commitsCount = 1 }
+          $preSuffix = "beta.$commitsCount"
+        }
+        elseif ($branchName -like 'release-rc/*') {
+          $commitsCount = git rev-list --count HEAD 2>$null
+          if ([string]::IsNullOrEmpty($commitsCount)) { $commitsCount = 1 }
+          $preSuffix = "rc.$commitsCount"
+        }
+        # If none of these, it's presumably a final release or a standard branch (main, develop, etc.)
+    
+        # 4) Construct final version
+        if ([string]::IsNullOrEmpty($preSuffix)) {
+          # final version
+          $version = "v$($newMajor).$($newMinor).$($newPatch)-build$($env:BUILD_NUMBER)"
+          $isPrerelease = "false"
+        }
+        else {
+          # pre-release
+          $version = "v$($newMajor).$($newMinor).$($newPatch)-$preSuffix-build$($env:BUILD_NUMBER)"
+          $isPrerelease = "true"
+        }
+    
+        Write-Host "Computed version => $version"
+        "VERSION=$version"         | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        "IS_PRERELEASE=$isPrerelease" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        "MAJOR=$newMajor"          | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        "MINOR=$newMinor"          | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        "PATCH=$newPatch"          | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+    
 
       ########################################################################
       # 5) Build the icon editor VI package, passing correct param set
