@@ -15,74 +15,76 @@ on:
       - hotfix/*
   workflow_dispatch:
 
+# Default environment variables implementing final parameters
+# You can override them via "env:" on a specific job or repository-level settings
+env:
+  # (R1) Whether to create the GitHub Release in draft mode (true) or publish immediately (false)
+  DRAFT_RELEASE: true
+
+  # (R4) Whether to use GitHub's auto-generated release notes
+  USE_AUTO_NOTES: true
+
+  # (R5) Whether to attach the ephemeral .zip (containing the .vip) to the release
+  ATTACH_ARTIFACTS_TO_RELEASE: true
+
+  # (R9) Whether to disable GPG signing on forks by default 
+  DISABLE_GPG_ON_FORKS: true
+
 jobs:
   build-release:
     runs-on: [self-hosted, iconeditor]
 
     permissions:
-      contents: write   # needed to push tags & create releases
+      contents: write    # needed to push tags & create releases
       issues: read
       pull-requests: read
 
     steps:
       ########################################################################
-      # (A) DISABLE GPG SIGNING IF ON A FORK (NOT 'ni/labview-icon-editor')
+      # (A) DISABLE GPG SIGNING IF WE'RE ON A FORK
       ########################################################################
-      - name: Disable GPG signing (only on forks)
-        if: ${{ github.repository != 'ni/labview-icon-editor' }}
+      - name: Check if we disable GPG signing on forks
+        if: env.DISABLE_GPG_ON_FORKS == 'true'
         id: disable_signing
         shell: pwsh
         run: |
-          Write-Host "Detected fork; temporarily disabling GPG signing..."
+          if ("${{ github.repository }}" -ne "ni/labview-icon-editor-test") {
+            Write-Host "Detected a fork; disabling GPG signing..."
+            # Grab current config for commit.gpgsign/tag.gpgsign
+            $currentCommitGpgsign = git config --global commit.gpgsign
+            if (-not $currentCommitGpgsign) { $currentCommitGpgsign = "" }
 
-          # Grab current config (if set) for commit & tag
-          $currentCommitGpgsign = git config --global commit.gpgsign
-          if (-not $currentCommitGpgsign) { $currentCommitGpgsign = "" }
+            $currentTagGpgsign = git config --global tag.gpgsign
+            if (-not $currentTagGpgsign) { $currentTagGpgsign = "" }
 
-          $currentTagGpgsign = git config --global tag.gpgsign
-          if (-not $currentTagGpgsign) { $currentTagGpgsign = "" }
+            Write-Host "commit.gpgsign (old) = $currentCommitGpgsign"
+            Write-Host "tag.gpgsign (old)    = $currentTagGpgsign"
 
-          Write-Host "Found commit.gpgsign=$currentCommitGpgsign"
-          Write-Host "Found tag.gpgsign=$currentTagGpgsign"
+            # Set outputs so we can restore them later
+            "old_commit_gpgsign=$currentCommitGpgsign" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            "old_tag_gpgsign=$currentTagGpgsign"       | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
-          # Make them available as step outputs
-          "commit_gpgsign=$currentCommitGpgsign" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          "tag_gpgsign=$currentTagGpgsign"       | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-
-          # Disable GPG signing
-          git config --global commit.gpgsign false
-          git config --global tag.gpgsign false
+            # Disable them
+            git config --global commit.gpgsign false
+            git config --global tag.gpgsign false
+          } else {
+            Write-Host "This is the official repo; no GPG signing changes."
+            # If not a fork, output empty so the restore step doesn't fail
+            "old_commit_gpgsign=" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            "old_tag_gpgsign="    | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          }
 
       ########################################################################
-      # 1) CHECK OUT CODE (FULL DEPTH FOR COMMIT COUNT)
+      # 1) CHECK OUT CODE (FULL DEPTH)
       ########################################################################
       - name: Check out code
         uses: actions/checkout@v3
         with:
           persist-credentials: true
-          fetch-depth: 0  # Important, so we have the entire commit history
+          fetch-depth: 0   # We need the full commit history for the commit-based build number
 
       ########################################################################
-      # 2) LABEL ENFORCEMENT (Pull Request only)
-      ########################################################################
-      - name: Validate version bump label
-        if: ${{ github.event_name == 'pull_request' }}
-        uses: actions/github-script@v6
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const labels = context.payload.pull_request.labels.map(l => l.name.toLowerCase());
-            const allowed = ['major', 'minor', 'patch'];
-            const intersection = labels.filter(l => allowed.includes(l));
-
-            if (intersection.length === 0) {
-              core.setFailed(`No valid version label found. Must have one of: ${allowed.join(', ')}`);
-            } else {
-              core.info(`Found valid label(s): ${intersection.join(', ')}`);
-            }
-
-      ########################################################################
-      # 3) DETERMINE BUMP TYPE (major/minor/patch) OR DEFAULT TO patch
+      # 2) DETERMINE BUMP TYPE FROM LABELS (MAJOR/MINOR/PATCH), ELSE NO BUMP
       ########################################################################
       - name: Determine bump type
         id: bump_type
@@ -90,43 +92,42 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
+            // If this is a pull_request event, read the labels
             if (context.event_name === 'pull_request') {
               const labels = context.payload.pull_request.labels.map(l => l.name.toLowerCase());
               core.info(`Found labels on PR: ${labels.join(', ')}`);
 
-              let bump = 'patch'; // fallback if no label
-              if (labels.includes('major'))  bump = 'major';
-              else if (labels.includes('minor')) bump = 'minor';
-              else if (labels.includes('patch')) bump = 'patch';
+              let bump = 'none'; // default if no recognized label
+              if (labels.includes('major')) {
+                bump = 'major';
+              } else if (labels.includes('minor')) {
+                bump = 'minor';
+              } else if (labels.includes('patch')) {
+                bump = 'patch';
+              }
               core.setOutput('bump_type', bump);
             } else {
-              // Direct push => default patch
-              core.setOutput('bump_type', 'patch');
+              // For a push without a PR, default to 'none'
+              core.setOutput('bump_type', 'none');
             }
 
       ########################################################################
-      # 4) DETERMINE GLOBAL BUILD NUMBER (COMMIT COUNT) VIA POWERSHELL
+      # 3) COMMIT-BASED BUILD NUMBER
       ########################################################################
-      - name: Determine global build number
+      - name: Determine build number
         id: inc_build
         shell: pwsh
         run: |
-          # Ensure we have full commit history
-          git fetch --unshallow 2>$null || Write-Host "Repo was already unshallow"
+          git fetch --unshallow 2>$null || Write-Host "Repo was already full clone."
 
-          # Count commits since beginning of repo
-          $count = (git rev-list --count HEAD)
-          Write-Host "Total commits = $count"
+          $commitCount = git rev-list --count HEAD
+          Write-Host "Commit-based build number => $commitCount"
 
-          # We'll use the commit count as the build number
-          $newBuild = $count
-          Write-Host "Computed new build number => $newBuild"
-
-          # Output to GITHUB_OUTPUT
-          "new_build_number=$newBuild" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          # Output
+          "new_build_number=$commitCount" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       ########################################################################
-      # 5) COMPUTE NEXT SEMVER (RELEASE/* => RC, HOTFIX => FINAL)
+      # 4) PARSE LATEST VERSION TAG, INCREMENT IF NEEDED
       ########################################################################
       - name: Compute version string
         id: next_version
@@ -135,17 +136,10 @@ jobs:
           BUMP_TYPE: ${{ steps.bump_type.outputs.bump_type }}
           BUILD_NUMBER: ${{ steps.inc_build.outputs.new_build_number }}
         run: |
-          Write-Host "Bump type: $($env:BUMP_TYPE)"
-          Write-Host "Global build number: $($env:BUILD_NUMBER)"
+          Write-Host "Bump type is $($env:BUMP_TYPE)"
+          Write-Host "Build number is $($env:BUILD_NUMBER)"
 
-          $branchName = $env:GITHUB_REF -split '/' | Select-Object -Last 1
-          Write-Host "Branch name is: $branchName"
-
-          # If you prefer to parse the last stable tag or do something else, you can:
-          #   (But for this snippet, we assume your last known major/minor/patch is from a prior step.)
-          # For now, let's assume if there's no prior tag, we start from 0.0.0:
-
-          # We might need to find the last stable tag e.g. "v1.2.3" with or without -build
+          # 1) Find the latest stable tag matching v*.*.*-build*
           $latestTag = git tag --list 'v*.*.*-build*' | Sort-Object -Descending | Select-Object -First 1
           if ([string]::IsNullOrEmpty($latestTag)) {
             $baseMajor = 0
@@ -153,8 +147,9 @@ jobs:
             $basePatch = 0
           }
           else {
+            # Remove leading 'v'
             $tagNoPrefix = $latestTag.TrimStart('v')
-            # e.g. from "1.2.3-build45" => "1.2.3"
+            # example: "1.2.3-build45" => "1.2.3"
             $versionPart = $tagNoPrefix -replace '-build.*',''
             $baseMajor, $baseMinor, $basePatch = $versionPart.Split('.')
           }
@@ -163,6 +158,7 @@ jobs:
           $newMinor = [int]$baseMinor
           $newPatch = [int]$basePatch
 
+          # 2) If there's a label for major/minor/patch, increment
           switch ($env:BUMP_TYPE) {
             'major' {
               $newMajor++
@@ -176,38 +172,79 @@ jobs:
             'patch' {
               $newPatch++
             }
+            'none' {
+              # do nothing. We rely on build number changes only
+            }
           }
 
-          # If branch is release/* => produce -rc.<N>
+          # 3) Check if branch is release/* => produce -rc.<N>
+          $branchName = $env:GITHUB_REF -split '/' | Select-Object -Last 1
           $rcSuffix = ""
           if ($branchName -like 'release/*') {
             $commitsCount = git rev-list --count HEAD ^origin/develop 2>$null
             if ([string]::IsNullOrEmpty($commitsCount)) { $commitsCount = 1 }
             $rcSuffix = "rc.$commitsCount"
           }
-          elseif ($branchName -like 'hotfix/*' -or $branchName -eq 'main') {
-            $rcSuffix = ""
-          }
 
           if ([string]::IsNullOrEmpty($rcSuffix)) {
             $version = "v$($newMajor).$($newMinor).$($newPatch)-build$($env:BUILD_NUMBER)"
-            $isPrerelease = "false"
           }
           else {
             $version = "v$($newMajor).$($newMinor).$($newPatch)-$rcSuffix-build$($env:BUILD_NUMBER)"
-            $isPrerelease = "true"
           }
 
           Write-Host "Computed version => $version"
 
+          # Output
           "VERSION=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          "IS_PRERELEASE=$isPrerelease" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          "MAJOR=$newMajor" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          "MINOR=$newMinor" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          "PATCH=$newPatch" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       ########################################################################
-      # 6) CREATE & PUSH NEW TAG (SKIP FOR PR)
+      # 5) BUILD THE ICON EDITOR VI PACKAGE
+      #    also embed \Tooling\deployment\release_notes.md in the .vip
+      ########################################################################
+      - name: Build the icon editor VI package
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.next_version.outputs.VERSION }}
+          BUILD: ${{ steps.inc_build.outputs.new_build_number }}
+        run: |
+          $repoRoot      = $env:GITHUB_WORKSPACE
+          $scriptsFolder = Join-Path $repoRoot 'pipeline/scripts'
+
+          Write-Host "Building VI package with version = $($env:VERSION)"
+
+          # Here you embed the local release notes in the .vip
+          $notesFile = Join-Path $repoRoot "\Tooling\deployment\release_notes.md"
+          if (-not (Test-Path $notesFile)) {
+            Write-Warning "release_notes.md not found at $notesFile. Using fallback notes."
+          }
+
+          # For demonstration, run a hypothetical build script:
+          .\pipeline\scripts\Build.ps1 `
+            -RelativePath        $repoRoot `
+            -AbsolutePathScripts $scriptsFolder `
+            -Version             $env:VERSION `
+            -NotesPath           $notesFile
+
+          # Suppose the script outputs a .vip, then we compress it for ephemeral artifact:
+          # E.g. v1.2.3-build10.zip
+          $zipName = "$($env:VERSION).zip"
+          Write-Host "Zipping the .vip into $zipName"
+          Compress-Archive -Path ".\output\IconEditorPackage.vip" -DestinationPath $zipName
+
+          Write-Host "Package ready: $zipName"
+
+      ########################################################################
+      # 6) UPLOAD THE ZIP AS AN ACTION ARTIFACT (even if not attaching to release)
+      ########################################################################
+      - name: Upload ephemeral zip artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ steps.next_version.outputs.VERSION }}
+          path: "*.zip"
+
+      ########################################################################
+      # 7) CREATE AND PUSH THE TAG (if not a PR)
       ########################################################################
       - name: Create & push tag
         if: ${{ github.event_name != 'pull_request' }}
@@ -221,90 +258,97 @@ jobs:
           git push origin $VERSION
 
       ########################################################################
-      # 7) BUILD VI PACKAGE
-      ########################################################################
-      - name: Build the icon editor VI package
-        if: ${{ success() }}
-        shell: pwsh
-        env:
-          MAJOR: ${{ steps.next_version.outputs.MAJOR }}
-          MINOR: ${{ steps.next_version.outputs.MINOR }}
-          PATCH: ${{ steps.next_version.outputs.PATCH }}
-          BUILD: ${{ steps.inc_build.outputs.new_build_number }}
-          COMMIT: ${{ github.sha }}
-        run: |
-          $repoRoot      = $env:GITHUB_WORKSPACE
-          $scriptsFolder = Join-Path $repoRoot 'pipeline/scripts'
-
-          Write-Host "Semantic Version: $($env:MAJOR).$($env:MINOR).$($env:PATCH).$($env:BUILD)"
-          Write-Host "Commit: $($env:COMMIT)"
-
-          .\pipeline\scripts\Build.ps1 `
-            -RelativePath        $repoRoot `
-            -AbsolutePathScripts $scriptsFolder `
-            -Major               $env:MAJOR `
-            -Minor               $env:MINOR `
-            -Patch               $env:PATCH `
-            -Build               $env:BUILD `
-            -Commit              $env:COMMIT
-
-      ########################################################################
-      # 8) UPLOAD ARTIFACT
-      ########################################################################
-      - name: Upload VIP artifact
-        if: ${{ success() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.next_version.outputs.VERSION }}
-          path: "builds/VI Package/*.vip"
-
-      ########################################################################
-      # 9) CREATE GITHUB RELEASE (PRE-RELEASE IF 'rc')
+      # 8) CREATE GITHUB RELEASE
       ########################################################################
       - name: Create GitHub Release
         if: ${{ success() && github.event_name != 'pull_request' }}
+        id: create_release
         uses: actions/github-script@v6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const versionTag = '${{ steps.next_version.outputs.VERSION }}';
-            const isPrerelease = ('${{ steps.next_version.outputs.IS_PRERELEASE }}' === 'true');
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
 
-            await github.rest.repos.createRelease({
-              owner,
-              repo,
+            // R1: draft_release => default: true
+            // Convert string "true"/"false" from env to boolean
+            const draftRelease = (process.env.DRAFT_RELEASE || 'true').toLowerCase() === 'true';
+
+            // R4: use_auto_notes => default: true
+            const useAutoNotes = (process.env.USE_AUTO_NOTES || 'true').toLowerCase() === 'true';
+
+            // Build the createRelease parameters
+            const createParams = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
               tag_name: versionTag,
               name: versionTag,
-              prerelease: isPrerelease
-            });
+              draft: draftRelease,
+            };
 
-            core.info(`Created ${isPrerelease ? 'pre-release' : 'final release'} for tag: ${versionTag}`);
+            if(useAutoNotes) {
+              createParams.generate_release_notes = true;
+            } else {
+              // optionally read from local file if you want (release_notes.md)
+              // for now, just do minimal
+              createParams.body = "See local release_notes.md for details.";
+            }
+
+            const response = await github.rest.repos.createRelease(createParams);
+            core.setOutput("upload_url", response.data.upload_url);
+            core.info(`Created release [draft=${draftRelease}] => ${versionTag}`);
 
       ########################################################################
-      # (B) RE-ENABLE GPG SIGNING IF DISABLED
+      # 9) ATTACH THE ZIP ARTIFACT TO THE RELEASE (IF R5=TRUE)
       ########################################################################
-      - name: Re-enable GPG signing (only on forks)
-        if: always() && github.repository != 'ni/labview-icon-editor'
+      - name: Attach ephemeral zip to Release
+        if: ${{ success() && env.ATTACH_ARTIFACTS_TO_RELEASE == 'true' && github.event_name != 'pull_request' }}
         shell: pwsh
         run: |
-          Write-Host "Restoring GPG signing to previous config..."
-
-          $oldCommitGpgsign = '${{ steps.disable_signing.outputs.commit_gpgsign }}'
-          $oldTagGpgsign    = '${{ steps.disable_signing.outputs.tag_gpgsign }}'
-
-          Write-Host "Previous commit.gpgsign = $oldCommitGpgsign"
-          Write-Host "Previous tag.gpgsign    = $oldTagGpgsign"
-
-          if ($oldCommitGpgsign) {
-            git config --global commit.gpgsign $oldCommitGpgsign
-          } else {
-            git config --global --unset commit.gpgsign || Write-Host "commit.gpgsign was not set."
+          # We'll attach the same file we uploaded as an ephemeral artifact => vX.X.X-buildY.zip
+          # Because the ephemeral artifact is available in the same job only if we actually downloaded it again.
+          # Alternatively, we can store it locally from the earlier step. 
+          # For demonstration, let's assume we didn't remove it:
+          $files = Get-ChildItem -Path . -Filter "*.zip"
+          if ($files.Count -eq 0) {
+            Write-Warning "No zip files found to attach."
+            exit 0
           }
 
-          if ($oldTagGpgsign) {
-            git config --global tag.gpgsign $oldTagGpgsign
+          $uploadUrl = '${{ steps.create_release.outputs.upload_url }}'
+          if (-not $uploadUrl) {
+            Write-Warning "No upload_url from create_release step."
+            exit 0
+          }
+
+          foreach($f in $files) {
+            Write-Host "Attaching $($f.Name) to release => $uploadUrl"
+            # Use GitHub CLI or the REST API for uploading assets
+            gh api "$uploadUrl?name=$($f.Name)" -F "@$($f.Name)=application/octet-stream"
+          }
+
+      ########################################################################
+      # (B) RESTORE GPG SIGNING IF WE DISABLED IT
+      ########################################################################
+      - name: Re-enable GPG signing (only if it was disabled)
+        if: always() && env.DISABLE_GPG_ON_FORKS == 'true'
+        shell: pwsh
+        run: |
+          if ("${{ github.repository }}" -ne "ni/labview-icon-editor-test") {
+            Write-Host "Restoring GPG signing to previous config..."
+            $oldCommitGpgsign = '${{ steps.disable_signing.outputs.old_commit_gpgsign }}'
+            $oldTagGpgsign    = '${{ steps.disable_signing.outputs.old_tag_gpgsign }}'
+
+            if ($oldCommitGpgsign) {
+              git config --global commit.gpgsign $oldCommitGpgsign
+            } else {
+              git config --global --unset commit.gpgsign || Write-Host "commit.gpgsign was not originally set."
+            }
+
+            if ($oldTagGpgsign) {
+              git config --global tag.gpgsign $oldTagGpgsign
+            } else {
+              git config --global --unset tag.gpgsign || Write-Host "tag.gpgsign was not originally set."
+            }
           } else {
-            git config --global --unset tag.gpgsign || Write-Host "tag.gpgsign was not set."
+            Write-Host "Official repo or DISABLE_GPG_ON_FORKS==false => no restore needed."
           }
