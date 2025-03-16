@@ -288,37 +288,38 @@ jobs:
         if: ${{ success() && env.ATTACH_ARTIFACTS_TO_RELEASE == 'true' && github.event_name != 'pull_request' }}
         shell: pwsh
         run: |
-          $vipPath = '${{ steps.find_vip.outputs.vip_path }}'
-          if (-not (Test-Path $vipPath)) {
-            Write-Warning "VIP file not found at $vipPath"
-            exit 0
-          }
-
-          $uploadUrl = '${{ steps.create_release.outputs.upload_url }}'
-          if (-not $uploadUrl) {
-            Write-Warning "No upload_url from create_release step."
-            exit 0
-          }
-
-          # The uploadUrl typically has {...}?name,label
-          # We remove {..} so we can append ?name=<filename> ourselves
-          $uploadUrlClean = $uploadUrl -replace '{\?name,label}', ''
+        $vipPath = '${{ steps.find_vip.outputs.vip_path }}'
+        if (-not (Test-Path $vipPath)) {
+          Write-Warning "VIP file not found at $vipPath"
+          exit 0
+        }
     
-          $fileName = [System.IO.Path]::GetFileName($vipPath)
-          Write-Host "Attaching $vipPath => $uploadUrlClean?name=$fileName"
-
-          # Prepare headers for GitHub API
-          $headers = @{
-            "Authorization" = "Bearer $env:GITHUB_TOKEN"
-            "Content-Type"  = "application/octet-stream"
-          }
-
-          # Use Invoke-RestMethod to POST the file
-          Invoke-RestMethod `
-            -Uri "$uploadUrlClean?name=$($fileName)" `
-            -Method POST `
-            -Headers $headers `
-            -InFile $vipPath
+        $uploadUrl = '${{ steps.create_release.outputs.upload_url }}'
+        if (-not $uploadUrl) {
+          Write-Warning "No upload_url from create_release step."
+          exit 0
+        }
+    
+        # 1) Split at '{' and keep the part before it
+        $uploadUrlClean = $uploadUrl.Split('{')[0]
+    
+        $fileName = [System.IO.Path]::GetFileName($vipPath)
+        $uri = "$uploadUrlClean?name=$fileName"
+    
+        Write-Host "Attaching $vipPath => $uri"
+    
+        # 2) Prepare headers for GitHub API
+        $headers = @{
+          "Authorization" = "Bearer $env:GITHUB_TOKEN"
+          "Content-Type"  = "application/octet-stream"
+        }
+    
+        # 3) Use Invoke-RestMethod to POST the file
+        Invoke-RestMethod `
+          -Uri $uri `
+          -Method POST `
+          -Headers $headers `
+          -InFile $vipPath
 
       ########################################################################
       # (B) Re-enable GPG signing if it was disabled
