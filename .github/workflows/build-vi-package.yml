@@ -285,9 +285,9 @@ jobs:
       # 10) Attach ephemeral .vip to Release (if ATTACH_ARTIFACTS_TO_RELEASE==true)
       ########################################################################
       - name: Attach .vip to Release
-        if: ${{ success() && env.ATTACH_ARTIFACTS_TO_RELEASE == 'true' && github.event_name != 'pull_request' }}
-        shell: pwsh
-        run: |
+      if: ${{ success() && env.ATTACH_ARTIFACTS_TO_RELEASE == 'true' && github.event_name != 'pull_request' }}
+      shell: pwsh
+      run: |
         $vipPath = '${{ steps.find_vip.outputs.vip_path }}'
         if (-not (Test-Path $vipPath)) {
           Write-Warning "VIP file not found at $vipPath"
