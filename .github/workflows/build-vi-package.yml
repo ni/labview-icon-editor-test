@@ -293,16 +293,32 @@ jobs:
             Write-Warning "VIP file not found at $vipPath"
             exit 0
           }
-          
+
           $uploadUrl = '${{ steps.create_release.outputs.upload_url }}'
           if (-not $uploadUrl) {
             Write-Warning "No upload_url from create_release step."
             exit 0
           }
 
+          # The uploadUrl typically has {...}?name,label
+          # We remove {..} so we can append ?name=<filename> ourselves
+          $uploadUrlClean = $uploadUrl -replace '{\?name,label}', ''
+    
           $fileName = [System.IO.Path]::GetFileName($vipPath)
-          Write-Host "Attaching $vipPath => $uploadUrl"
-          gh api "$uploadUrl?name=$fileName" -F "@$vipPath=application/octet-stream"
+          Write-Host "Attaching $vipPath => $uploadUrlClean?name=$fileName"
+
+          # Prepare headers for GitHub API
+          $headers = @{
+            "Authorization" = "Bearer $env:GITHUB_TOKEN"
+            "Content-Type"  = "application/octet-stream"
+          }
+
+          # Use Invoke-RestMethod to POST the file
+          Invoke-RestMethod `
+            -Uri "$uploadUrlClean?name=$($fileName)" `
+            -Method POST `
+            -Headers $headers `
+            -InFile $vipPath
 
       ########################################################################
       # (B) Re-enable GPG signing if it was disabled
