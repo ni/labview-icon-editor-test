@@ -1,162 +1,154 @@
-# Local CI/CD Workflows
+# Local CI/CD Workflows (Multi-Channel Release Support)
 
-This document explains how to automate build, test, and distribution steps for the Icon Editor using GitHub Actions. It includes features features such as **fork-friendly GPG signing** toggles, **automatic version bumping** (using labels), and the **release creation** process.
+This document explains how to automate build, test, and distribution steps for the Icon Editor using GitHub Actions, now **supporting multiple pre-release channels** (Alpha, Beta, RC). It includes features such as **fork-friendly GPG signing** toggles, **automatic version bumping** (using PR labels), and the **release creation** process.  
 
----
+With **multi-channel** support, branches named `release-alpha/*`, `release-beta/*`, or `release-rc/*` will produce pre-release versions (e.g., `-alpha.<N>`, `-beta.<N>`, `-rc.<N>`). Merging to main yields a final release.
+
+
 
 ## Table of Contents
 
 1. [Introduction](#1-introduction)  
 2. [Quickstart](#2-quickstart)  
-3. [Detailed Guide](#3-detailed-guide)  
+3. [Getting Started](#3-getting-started)  
    1. [Development vs. Testing](#31-development-vs-testing)  
    2. [Available CI Workflows](#32-available-ci-workflows)  
    3. [Setting Up a Self-Hosted Runner](#33-setting-up-a-self-hosted-runner)  
    4. [Running the Actions Locally](#34-running-the-actions-locally)  
    5. [Example Developer Workflow](#35-example-developer-workflow)
 
----
 
+
+<a name="1-introduction"></a>
 ## 1. Introduction
 
 Automating your Icon Editor builds and tests:
 - Provides consistent steps for every commit or pull request
 - Minimizes manual toggling of LabVIEW environment settings
 - Stores build artifacts (VI Packages) in GitHub for easy download
-- Automatically versions releases using **semantic version** logic
+- **Automatically versions releases** using label-based semantic logic and **commit-based** build numbers
+- Supports **multiple pre-release channels** (alpha, beta, rc) by detecting branch names (`release-alpha/*`, `release-beta/*`, `release-rc/*`)
 - Handles GPG signing in the main repo but **disables** it for forks (so fork owners aren’t blocked by passphrase prompts)
 
 **Prerequisites**:  
-- LabVIEW 2021 SP1  (32 and 64-bit)
+- LabVIEW 2021 SP1 (32 and 64-bit)  
 - PowerShell 7+  
 - Git for Windows  
 
----
+For more details on the multi-channel release branching pattern, see **docs/ci/actions/multichannel-release-workflow.md**.
 
+
+
+<a name="2-quickstart"></a>
 ## 2. Quickstart
 
 1. **Install PowerShell & Git**  
-   Ensure your environment has the required tools before setting up the workflows.
+   Ensure your environment has the required tools (plus LabVIEW) before setting up the workflows.
 
 2. **Configure a Self-Hosted Runner**  
-   Under **Settings → Actions → Runners** in your GitHub repo or organization, add a runner with LabVIEW installed.
+   Under **Settings → Actions → Runners** in your GitHub repo, add a runner with LabVIEW installed. Label it as `self-hosted, iconeditor` (or adjust the workflows accordingly).
 
 3. **Enable/Disable Development Mode**  
-   You can toggle Development Mode either via the “Development Mode Toggle” workflow or manually.  
-   - Development Mode modifies `labview.ini` to reference your local source code.
+   You can toggle Development Mode either via the “Development Mode Toggle” workflow or manually. Development Mode modifies `labview.ini` to reference your local source code.
 
 4. **Run Unit Tests**  
-   Use the **Run Unit Tests** workflow to confirm your environment is valid.  
-   - Typically run with Dev Mode **disabled** unless you’re testing dev features specifically.
+   Use the **Run Unit Tests** workflow to confirm your environment is valid. Typically run with Dev Mode **disabled** unless you’re testing dev features specifically.
 
-5. **Build VI Package & Release**  
+5. **Build VI Package & Release** (Multi-Channel)  
    - Produces `.vip` artifacts automatically.  
-   - Uses **label-based** version bumping (major/minor/patch) on pull requests.  
-   - Creates tags and releases for direct pushes (unless it’s a PR).
+   - Uses **label-based** version bumping (major/minor/patch) on PRs or `none` if unlabeled.  
+   - Appends `-buildN` from total commits.  
+   - Detects branch name for pre-release channels:  
+     - `release-alpha/*` → `-alpha.<N>`  
+     - `release-beta/*` → `-beta.<N>`  
+     - `release-rc/*` → `-rc.<N>`  
+   - Creates tags and releases for direct pushes (not for PRs), with GPG signing disabled if fork.
 
 6. **Disable Dev Mode** (optional)  
    Reverts your environment to normal LabVIEW settings, removing local overrides.
 
----
 
-## 3. Detailed Guide
+
+<a name="3-getting-started"></a>
+## 3. Getting Started
 
 ### 3.1 Development vs. Testing
 
 - **Development Mode**:  
-  A specialized configuration where LabVIEW references local paths for the Icon Editor code. Useful for debugging or certain dev features.  
-  - Enable via `Set_Development_Mode.ps1` or the **Development Mode Toggle** workflow.
+  A specialized configuration where LabVIEW references local paths for the Icon Editor code. Useful for debugging or certain dev features. Enable via `Set_Development_Mode.ps1` or the **Development Mode Toggle** workflow.
 
 - **Testing / Distributable Builds**:  
   Typically done in **normal** LabVIEW mode. If you forget to disable Dev Mode, tests or builds might rely on your local dev environment in unexpected ways.
 
----
+
 
 ### 3.2 Available CI Workflows
 
-Below are the **key GitHub Actions** provided in this repository:
-
-1. **[Development Mode Toggle](https://github.com/ni/labview-icon-editor/actions/workflows/development-mode-toggle.yml)**
+1. **[Development Mode Toggle]**  
    - Invokes `Set_Development_Mode.ps1` or `RevertDevelopmentMode.ps1`.  
-   - Usually triggered via `workflow_dispatch` for manual toggling.
+   - Usually triggered via `workflow_dispatch`.
 
-2. **[Build and Release VI Package](https://github.com/ni/labview-icon-editor/actions/workflows/build-release-vi-package.yml)**  
-   - **Automatically** versions your code based on PR labels (`major`, `minor`, `patch`) or defaults to `patch` for direct pushes.  
-   - Uses a **build counter** to ensure each artifact is uniquely numbered (e.g., `v1.2.3-build4`).  
-   - **Fork-Friendly**: Disables GPG signing if it detects a fork (so no passphrase is needed). In the **main repo** (`ni/labview-icon-editor`), signing remains active.  
-   - Produces the `.vip` file via a PowerShell script (e.g., `Build.ps1`).  
-   - Uploads the `.vip` artifact to GitHub’s build artifacts.  
-   - Creates a **GitHub Release** for direct pushes (not for PRs).
+2. **[Build and Release VI Package (Multi-Channel)]**  
+   - **Automatically** versions your code based on PR labels (`major`, `minor`, `patch`).  
+   - Uses a **commit-based** build number: `vX.Y.Z[-pre.<N>]-build<commitCount>`.  
+   - Detects **alpha/beta/rc** branches for multiple pre-release channels:  
+     - `release-alpha/*` → `-alpha.<N>`  
+     - `release-beta/*` → `-beta.<N>`  
+     - `release-rc/*` → `-rc.<N>`  
+   - **Fork-Friendly**: Disables GPG signing if it’s not the main repo.  
+   - Produces `.vip` artifacts, optionally attaches them to the GitHub Release if `ATTACH_ARTIFACTS_TO_RELEASE == true`.
 
-3. **[Run Unit Tests](https://github.com/ni/labview-icon-editor/actions/workflows/run-unit-tests.yml)**  
+3. **[Run Unit Tests]**  
    - Executes `unit_tests.ps1` in `pipeline/scripts`.  
-   - Usually expects Dev Mode **disabled** for consistent test results.  
-   - Also triggered on pull requests for validation.
+   - Typically expects Dev Mode **disabled**.
 
----
+
 
 ### 3.3 Setting Up a Self-Hosted Runner
 
-1. **Install Prerequisites**:  
+1. **Install Prerequisites**  
    - LabVIEW 2021 SP1  
    - PowerShell 7+  
    - Git for Windows
 
-2. **Add Self-Hosted Runner**:  
-   Go to **Settings → Actions → Runners** in your GitHub repository (or organization) and follow the steps to register a runner on your machine that has LabVIEW installed.
+2. **Add Self-Hosted Runner**  
+   - Go to **Settings → Actions → Runners** in your GitHub repository. Follow instructions to register a runner on a Windows machine with LabVIEW installed.
 
-3. **Label the Runner** (optional):  
-   - You may label it `self-hosted, iconeditor` (or adjust the workflow’s `runs-on` lines to match your chosen labels).  
-   - This helps ensure the correct environment is used for building the Icon Editor.
+3. **Label the Runner**  
+   - For example, `self-hosted, iconeditor`.  
+   - The workflow’s `runs-on` references these labels to ensure it picks the correct environment.
 
----
+
 
 ### 3.4 Running the Actions Locally
 
-Although GitHub Actions primarily runs on GitHub-hosted or self-hosted agents, you can **replicate** the general process locally:
-
-1. **Enable Development Mode** (mandatory to be able to work on the source):  
-   - Run the “Development Mode Toggle” workflow with `enable` or manually call `Set_Development_Mode.ps1`.
-
+1. **Enable Development Mode** (if you need local dev references).  
 2. **Run Unit Tests**:  
-   - Confirm everything passes in your local environment.  
-   - If you have custom or dev references, ensure Dev Mode is toggled appropriately.
-
+   - Either the Run Unit Tests workflow or `unit_tests.ps1`.  
 3. **Build VI Package**:  
-   - You can manually invoke `Build.ps1` from `pipeline/scripts` to generate a `.vip`.  
-   - On GitHub Actions, the workflow will produce and upload the artifact automatically.
+   - Manually call `Build.ps1` or rely on the GitHub Actions workflow to do it for you.  
+4. **Disable Dev Mode** if you plan to install the `.vip` normally.
 
-4. **Disable Dev Mode (Mandatory to be able to install the VI Package)**:  
-   - Revert to a normal LabVIEW environment so standard usage or testing can resume.
 
----
 
 ### 3.5 Example Developer Workflow
 
-**Scenario**: You want to implement a new feature and produce a `.vip` to install and test your change.
+**Scenario**: You want to implement a new feature, test it, and produce a `.vip` in a multi-channel approach:
 
-1. **Enable Development Mode**:  
-   
+1. **Create a feature branch** off `develop`.  
+2. **Label your PR** with `minor` if it’s a small feature (no label → no major/minor/patch bump).  
+3. **Merge** your PR into a pre-release branch:
+   - `release-alpha/2.0` if it’s early alpha,
+   - `release-beta/2.0` if it’s a later beta,
+   - `release-rc/2.0` for near-final.  
+4. The workflow detects `release-alpha/*` and appends `-alpha.<N>-build<commitCount>`.  
+5. After merging from alpha → beta → rc → main, you end up with a final version like `v2.0.0-build123`.
 
-2. **Implement & Test**:  
-   - Use the **Run Unit Tests** workflow or script to ensure your changes pass.
 
-3. **Open a Pull Request** and **Label** it:  
-   - Assign `major`, `minor`, or `patch` to control the version bump.  
-   - The CI will validate your code but *won’t* tag or release until merged.
 
-4. **Merge the PR** into `develop` (or `main`):  
-   - The **Build VI Package & Release** workflow automatically tags the commit (e.g., `v1.2.0-build7`) and uploads the `.vip`.
+**Notes**:
 
-5. **Disable Development Mode**:  
-   - Disable development mode, install the VI Package, and test your change on the IDE.
+- This multi-channel logic is spelled out in more detail at [docs/ci/actions/multichannel-release-workflow.md](docs/ci/actions/multichannel-release-workflow.md).
+- The ephemeral `.vip` artifact is downloadable from Actions. If `ATTACH_ARTIFACTS_TO_RELEASE == true`, it’s permanently in the GitHub Release assets.
+- If you’re in a fork, GPG signing is off to avoid passphrase issues. In the main repo, it remains on if keys are configured.
 
----
-
-## Final Notes
-
-- **Artifact Storage**: The `.vip` file is accessible under the Actions run summary (click “Artifacts”).
-- **Forking**: If another user forks your repo, the new **fork** sees GPG signing disabled automatically, preventing passphrase errors.
-- **Version Enforcement**: Pull requests without a version label default to `patch`; you can enforce labeling with an optional “Label Enforcer” step if desired.
-
-By adopting these workflows—**Development Mode Toggle**, **Run Unit Tests**, and especially **Build VI Package & Release**—you can maintain a **streamlined, consistent** CI/CD process for the Icon Editor, both in the main repository and any forks.

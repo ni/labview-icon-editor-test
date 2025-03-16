@@ -2,7 +2,6 @@
 
 This revised guide focuses on the **release workflow**, specifically how we handle **multiple pre-release channels** (Alpha, Beta, RC) in addition to final versions. It builds on the original structure, highlighting where the logic differs from a single “`release/*` → RC” approach.
 
----
 
 ## **Table of Contents**
 
@@ -23,7 +22,6 @@ This revised guide focuses on the **release workflow**, specifically how we hand
 8. [FAQ](#faq)  
 9. [Conclusion](#conclusion)
 
----
 
 <a name="overview--purpose"></a>
 ## **1. Overview & Purpose**
@@ -37,7 +35,6 @@ This **Multi-Channel Release Workflow** automates the packaging and releasing of
 
 By adopting these patterns, maintainers can run alpha, beta, and RC pipelines in parallel or sequentially, each channel generating distinct pre-release versions.
 
----
 
 <a name="requirements--environment"></a>
 ## **2. Requirements & Environment**
@@ -56,7 +53,6 @@ By adopting these patterns, maintainers can run alpha, beta, and RC pipelines in
 4. **Fork Considerations**  
    - If `DISABLE_GPG_ON_FORKS == true`, the workflow sets `commit.gpgsign` and `tag.gpgsign` to `false` for forks (i.e., if the `github.repository` is not your official name).
 
----
 
 <a name="configuration--branch-patterns"></a>
 ## **3. Configuration & Branch Patterns**
@@ -76,7 +72,6 @@ By adopting these patterns, maintainers can run alpha, beta, and RC pipelines in
 
 Use whichever patterns best fit your project’s branching model. If you prefer subdirectories (`release/alpha/*` vs. `release-alpha/*`), adapt the snippet accordingly.
 
----
 
 <a name="workflow-steps"></a>
 ## **4. Workflow Steps**
@@ -116,7 +111,6 @@ Below is a **high-level** breakdown. In your `.github/workflows/build-vi-package
   3. Create a GitHub release. If the version is alpha/beta/rc, set `prerelease: true`.  
   4. If `ATTACH_ARTIFACTS_TO_RELEASE == true`, attach the `.vip` to the release using `Invoke-RestMethod`.
 
----
 
 <a name="multiple-pre-release-channels-explained"></a>
 ## **5. Multiple Pre-Release Channels Explained**
@@ -154,7 +148,6 @@ Any commit to these branches triggers an alpha/beta/rc suffix. Merging to `main`
 - If branch doesn’t match alpha/beta/rc patterns, `$preSuffix` is empty.  
 - `isPrerelease = false`, resulting in a stable release, e.g. `v1.3.4-build50`.
 
----
 
 <a name="usage-examples"></a>
 ## **6. Usage Examples**
@@ -175,7 +168,6 @@ Any commit to these branches triggers an alpha/beta/rc suffix. Merging to `main`
 4. **No Pre-Release**  
    - If on `develop` or `main` directly, no suffix is appended, e.g. `v1.2.3-build22`.
 
----
 
 <a name="troubleshooting--tips"></a>
 ## **7. Troubleshooting & Tips**
@@ -195,7 +187,6 @@ Any commit to these branches triggers an alpha/beta/rc suffix. Merging to `main`
 5. **Same Bump Type**  
    - The label-based bump is orthogonal to alpha/beta/rc. If no label is set, major/minor/patch remain the same, but you might still produce `-alpha.<N>-buildXX`.
 
----
 
 <a name="faq"></a>
 ## **8. FAQ**
@@ -212,12 +203,8 @@ Any commit to these branches triggers an alpha/beta/rc suffix. Merging to `main`
 **Q4**: *How do I integrate these channels with tagging older versions or skipping certain channels?*  
 **A4**: You can skip alpha or beta if you like, or go from `develop` → `release-alpha/*` → `release-rc/*` → `main`. The workflow logic is flexible.
 
----
 
 <a name="conclusion"></a>
 ## **9. Conclusion**
 
 By supporting **multiple pre-release channels** (Alpha, Beta, RC), this updated release workflow offers greater flexibility for iterative testing stages. Each branch pattern yields a distinct suffix (`-alpha.<N>`, `-beta.<N>`, or `-rc.<N>`). Merging into a final branch (e.g., `main`) produces a stable release with no suffix, but still uses **commit-based** build numbering. Combined with label-based major/minor/patch increments, you have a **robust**, **fork-friendly**, and **multi-stage** CI/CD pipeline for LabVIEW. 
-```
-
-``````````````````````````

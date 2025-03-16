@@ -11,7 +11,7 @@ This document describes how to **build, test, and distribute** the **LabVIEW Ico
 6. [Local vs. CI Usage](#local-vs-ci-usage)
 7. [Example Developer Workflow](#example-developer-workflow)
 
----
+
 <a name="overview--prerequisites"></a>
 ## 1. Overview & Prerequisites
 
@@ -109,7 +109,6 @@ We provide **GitHub Actions** that wrap these same PowerShell scripts for buildi
    - The optional `-LabVIEWMinorRevision` param can override default minor version logic.
 6. **Closes** LabVIEW sessions in between steps.
 
----
 
 <a name="local-vs-ci-usage"></a>
 ## 6. Local vs. CI Usage
@@ -120,7 +119,6 @@ We provide **GitHub Actions** that wrap these same PowerShell scripts for buildi
    - Same scripts run automatically or on demand.
    - Pull requests can increment version (major/minor/patch) and produce `.vip`.
 
----
 
 <a name="example-developer-workflow"></a>
 ## 7. Example Developer Workflow
