@@ -17,17 +17,15 @@ on:
 
 env:
   DRAFT_RELEASE: true
-
-  # (R4) Whether to use GitHub auto notes
   USE_AUTO_NOTES: true
-  # (R5) Whether to attach the .vip to the release
-
-  # (R9) Disable GPG signing on forks
+  # (R9) Disable GPG signing on forks (set to 'true' if you want the step to run)
+  DISABLE_GPG_ON_FORKS: false
+  # (R5) Whether to attach the .vip to the release (set to 'true' if desired)
+  ATTACH_ARTIFACTS_TO_RELEASE: false
 
 jobs:
   build-release:
-    runs-on: [self-hosted, iconeditor]
-    # This workflow requires a self-hosted runner with the 'iconeditor' label.
+    # Requires a self-hosted runner with the "iconeditor" label
     runs-on: [self-hosted, iconeditor]
     permissions:
       contents: write
@@ -38,8 +36,8 @@ jobs:
       ########################################################################
       # A) Possibly disable GPG signing on forks
       ########################################################################
+      - name: Possibly disable GPG signing on forks
         if: ${{ env.DISABLE_GPG_ON_FORKS == 'true' }}
-        if: env.DISABLE_GPG_ON_FORKS == 'true'
         id: disable_signing
         shell: pwsh
         run: |
@@ -94,7 +92,7 @@ jobs:
               }
               core.setOutput('bump_type', bump);
             } else {
-              // For direct pushes, there are no labels to determine the bump type, so we set it to 'none'
+              // For direct pushes, default to 'none'
               core.setOutput('bump_type', 'none');
             }
 
@@ -106,10 +104,8 @@ jobs:
         shell: pwsh
         run: |
           git fetch --unshallow 2>$null || Write-Host "Already full clone."
-
           $commitCount = git rev-list --count HEAD
           Write-Host "Commit-based build number => $commitCount"
-
           "new_build_number=$commitCount" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       ########################################################################
@@ -125,7 +121,7 @@ jobs:
           Write-Host "Bump type: $($env:BUMP_TYPE)"
           Write-Host "Build number: $($env:BUILD_NUMBER)"
 
-          $latestTag = git describe --tags --abbrev=0
+          $latestTag = git describe --tags --abbrev=0 2>$null
           if ([string]::IsNullOrEmpty($latestTag)) {
             $baseMajor = 0
             $baseMinor = 0
@@ -220,7 +216,6 @@ jobs:
             exit 1
           }
           Write-Host "Discovered VIP File: $($vipFile.FullName)"
-          # Set output for downstream steps
           "vip_path=$($vipFile.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       ########################################################################
@@ -256,7 +251,6 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const versionTag = '${{ steps.next_version.outputs.VERSION }}';
-
             const draftRelease = (process.env.DRAFT_RELEASE || 'true').toLowerCase() === 'true';
             const useAutoNotes = (process.env.USE_AUTO_NOTES || 'true').toLowerCase() === 'true';
 
@@ -290,28 +284,24 @@ jobs:
             Write-Warning "VIP file not found at $vipPath"
             exit 0
           }
-      
+
           $uploadUrl = '${{ steps.create_release.outputs.upload_url }}'
           if (-not $uploadUrl) {
             Write-Warning "No upload_url from create_release step."
             exit 0
           }
-      
-          # 1) Split at '{' and keep the part before it
+
           $uploadUrlClean = $uploadUrl.Split('{')[0]
-      
           $fileName = [System.IO.Path]::GetFileName($vipPath)
           $uri = "$uploadUrlClean?name=$fileName"
-      
+
           Write-Host "Attaching $vipPath => $uri"
-      
-          # 2) Prepare headers for GitHub API
+
           $headers = @{
             "Authorization" = "Bearer $env:GITHUB_TOKEN"
             "Content-Type"  = "application/octet-stream"
           }
-      
-          # 3) Use Invoke-RestMethod to POST the file
+
           Invoke-RestMethod `
             -Uri $uri `
             -Method POST `
@@ -319,7 +309,7 @@ jobs:
             -InFile $vipPath
 
       ########################################################################
-      # (B) Re-enable GPG signing if it was disabled
+      # B) Re-enable GPG signing if it was disabled
       ########################################################################
       - name: Re-enable GPG signing (if disabled)
         if: ${{ always() && env.DISABLE_GPG_ON_FORKS == 'true' }}
