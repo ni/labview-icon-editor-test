@@ -16,16 +16,13 @@ on:
   workflow_dispatch:
 
 env:
-  # (R1) draft_release => default true
+  # (R1) Whether to create draft releases
   DRAFT_RELEASE: true
-
-  # (R4) use_auto_notes => default true
+  # (R4) Use GitHub auto notes
   USE_AUTO_NOTES: true
-
-  # (R5) attach_artifacts_to_release => default true
+  # (R5) Attach ephemeral .zip to release
   ATTACH_ARTIFACTS_TO_RELEASE: true
-
-  # (R9) disable_gpg_on_forks => default true
+  # (R9) Disable GPG signing on forks
   DISABLE_GPG_ON_FORKS: true
 
 jobs:
@@ -33,13 +30,13 @@ jobs:
     runs-on: [self-hosted, iconeditor]
 
     permissions:
-      contents: write
+      contents: write         # needed to push tags & create releases
       issues: read
       pull-requests: read
 
     steps:
       ########################################################################
-      # (A) Disable GPG signing if on a fork
+      # (A) Possibly disable GPG signing on forks
       ########################################################################
       - name: Check if we disable GPG signing on forks
         if: env.DISABLE_GPG_ON_FORKS == 'true'
@@ -54,22 +51,19 @@ jobs:
             $currentTagGpgsign = git config --global tag.gpgsign
             if (-not $currentTagGpgsign) { $currentTagGpgsign = "" }
 
-            Write-Host "commit.gpgsign (old) = $currentCommitGpgsign"
-            Write-Host "tag.gpgsign (old)    = $currentTagGpgsign"
-
             "old_commit_gpgsign=$currentCommitGpgsign" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
             "old_tag_gpgsign=$currentTagGpgsign"       | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
             git config --global commit.gpgsign false
             git config --global tag.gpgsign false
           } else {
-            Write-Host "This is the official repo; no GPG signing changes."
+            Write-Host "Official repo => no changes."
             "old_commit_gpgsign=" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
             "old_tag_gpgsign="    | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           }
 
       ########################################################################
-      # 1) Check out code (full depth)
+      # 1) Checkout code (full depth)
       ########################################################################
       - name: Check out code
         uses: actions/checkout@v3
@@ -78,7 +72,7 @@ jobs:
           fetch-depth: 0
 
       ########################################################################
-      # 2) Determine bump type from labels (major/minor/patch), else none
+      # 2) Determine bump type from PR labels
       ########################################################################
       - name: Determine bump type
         id: bump_type
@@ -100,7 +94,7 @@ jobs:
               }
               core.setOutput('bump_type', bump);
             } else {
-              // For a push w/o PR, default to 'none'
+              // direct push => fallback to 'none'
               core.setOutput('bump_type', 'none');
             }
 
@@ -111,15 +105,14 @@ jobs:
         id: inc_build
         shell: pwsh
         run: |
-          git fetch --unshallow 2>$null || Write-Host "Repo was already full clone."
+          git fetch --unshallow 2>$null || Write-Host "Already full clone."
 
           $commitCount = git rev-list --count HEAD
-          Write-Host "Commit-based build number => $commitCount"
-
+          Write-Host "Build number => $commitCount"
           "new_build_number=$commitCount" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       ########################################################################
-      # 4) Parse latest version tag, increment if needed
+      # 4) Parse latest version tag, apply bump if major/minor/patch
       ########################################################################
       - name: Compute version string
         id: next_version
@@ -128,8 +121,8 @@ jobs:
           BUMP_TYPE: ${{ steps.bump_type.outputs.bump_type }}
           BUILD_NUMBER: ${{ steps.inc_build.outputs.new_build_number }}
         run: |
-          Write-Host "Bump type is $($env:BUMP_TYPE)"
-          Write-Host "Build number is $($env:BUILD_NUMBER)"
+          Write-Host "Bump type: $($env:BUMP_TYPE)"
+          Write-Host "Build number: $($env:BUILD_NUMBER)"
 
           $latestTag = git tag --list 'v*.*.*-build*' | Sort-Object -Descending | Select-Object -First 1
           if ([string]::IsNullOrEmpty($latestTag)) {
@@ -181,40 +174,45 @@ jobs:
 
           Write-Host "Computed version => $version"
           "VERSION=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "MAJOR=$newMajor"  | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "MINOR=$newMinor"  | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "PATCH=$newPatch"  | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       ########################################################################
-      # 5) Build the icon editor VI Package, embed release_notes.md
+      # 5) Build the icon editor VI package using existing script params
       ########################################################################
       - name: Build the icon editor VI package
         shell: pwsh
         env:
-          VERSION: ${{ steps.next_version.outputs.VERSION }}
+          MAJOR: ${{ steps.next_version.outputs.MAJOR }}
+          MINOR: ${{ steps.next_version.outputs.MINOR }}
+          PATCH: ${{ steps.next_version.outputs.PATCH }}
           BUILD: ${{ steps.inc_build.outputs.new_build_number }}
+          COMMIT: ${{ github.sha }}
         run: |
           $repoRoot      = $env:GITHUB_WORKSPACE
           $scriptsFolder = Join-Path $repoRoot 'pipeline/scripts'
 
-          Write-Host "Building VI package with version = $($env:VERSION)"
-
-          $notesFile = Join-Path $repoRoot "\Tooling\deployment\release_notes.md"
-          if (-not (Test-Path $notesFile)) {
-            Write-Warning "release_notes.md not found. Using fallback notes."
-          }
+          Write-Host "Building VI package with version => M:$($env:MAJOR), m:$($env:MINOR), p:$($env:PATCH), b:$($env:BUILD)"
 
           .\pipeline\scripts\Build.ps1 `
             -RelativePath        $repoRoot `
             -AbsolutePathScripts $scriptsFolder `
-            -Version             $env:VERSION `
-            -NotesPath           $notesFile
+            -Major               $env:MAJOR `
+            -Minor               $env:MINOR `
+            -Patch               $env:PATCH `
+            -Build               $env:BUILD `
+            -Commit              $env:COMMIT
 
-          $zipName = "$($env:VERSION).zip"
-          Write-Host "Zipping .vip => $zipName"
+          # Suppose the script produces a .vip in .\output\IconEditorPackage.vip
+          # Let's zip that for ephemeral artifact usage:
+          $zipName = "v$($env:MAJOR).$($env:MINOR).$($env:PATCH)-build$($env:BUILD).zip"
+          Write-Host "Zipping the .vip => $zipName"
           Compress-Archive -Path ".\output\IconEditorPackage.vip" -DestinationPath $zipName
-
-          Write-Host "Package ready: $zipName"
+          Write-Host "Created ephemeral artifact: $zipName"
 
       ########################################################################
-      # 6) Upload ephemeral zip artifact (Using v4 to avoid deprecation)
+      # 6) Upload ephemeral zip artifact (actions/upload-artifact@v4)
       ########################################################################
       - name: Upload ephemeral zip artifact
         uses: actions/upload-artifact@v4
@@ -223,7 +221,7 @@ jobs:
           path: "*.zip"
 
       ########################################################################
-      # 7) Create & push tag (skip for PR)
+      # 7) Create & push tag (skip if it's a PR)
       ########################################################################
       - name: Create & push tag
         if: ${{ github.event_name != 'pull_request' }}
@@ -232,12 +230,11 @@ jobs:
           $VERSION = "${{ steps.next_version.outputs.VERSION }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
           git tag -a $VERSION -m "Auto-tag by CI for $VERSION"
           git push origin $VERSION
 
       ########################################################################
-      # 8) Create GitHub Release (Draft = true by default, auto notes = true)
+      # 8) Create GitHub Release (draft_release = true by default, auto notes = true)
       ########################################################################
       - name: Create GitHub Release
         if: ${{ success() && github.event_name != 'pull_request' }}
@@ -256,13 +253,13 @@ jobs:
               repo: context.repo.repo,
               tag_name: versionTag,
               name: versionTag,
-              draft: draftRelease,
+              draft: draftRelease
             };
 
-            if(useAutoNotes) {
+            if (useAutoNotes) {
               createParams.generate_release_notes = true;
             } else {
-              createParams.body = "See \Tooling\deployment\release_notes.md for details.";
+              createParams.body = "Release notes are embedded in the .vip or refer to local doc.";
             }
 
             const response = await github.rest.repos.createRelease(createParams);
@@ -270,7 +267,7 @@ jobs:
             core.info(`Created release [draft=${draftRelease}] => ${versionTag}`);
 
       ########################################################################
-      # 9) Attach ephemeral zip to Release if env.ATTACH_ARTIFACTS_TO_RELEASE==true
+      # 9) Attach ephemeral zip to Release (if ATTACH_ARTIFACTS_TO_RELEASE=true)
       ########################################################################
       - name: Attach ephemeral zip to Release
         if: ${{ success() && env.ATTACH_ARTIFACTS_TO_RELEASE == 'true' && github.event_name != 'pull_request' }}
@@ -278,7 +275,7 @@ jobs:
         run: |
           $files = Get-ChildItem -Path . -Filter "*.zip"
           if ($files.Count -eq 0) {
-            Write-Warning "No zip files found to attach to release."
+            Write-Warning "No zip files found to attach."
             exit 0
           }
 
@@ -289,14 +286,14 @@ jobs:
           }
 
           foreach($f in $files) {
-            Write-Host "Attaching file: $($f.Name) => $uploadUrl"
+            Write-Host "Attaching $($f.Name) to release => $uploadUrl"
             gh api "$uploadUrl?name=$($f.Name)" -F "@$($f.Name)=application/octet-stream"
           }
 
       ########################################################################
-      # (B) Re-enable GPG signing if we disabled it
+      # (B) Restore GPG signing if we disabled it
       ########################################################################
-      - name: Re-enable GPG signing (only if it was disabled)
+      - name: Re-enable GPG signing (only if disabled)
         if: always() && env.DISABLE_GPG_ON_FORKS == 'true'
         shell: pwsh
         run: |
@@ -310,6 +307,7 @@ jobs:
             } else {
               git config --global --unset commit.gpgsign || Write-Host "commit.gpgsign was not originally set."
             }
+
             if ($oldTagGpgsign) {
               git config --global tag.gpgsign $oldTagGpgsign
             } else {
