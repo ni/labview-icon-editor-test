@@ -16,13 +16,16 @@ on:
   workflow_dispatch:
 
 env:
-  # (R1) Whether to create draft releases
+  # (R1) Whether to create draft releases by default
   DRAFT_RELEASE: true
-  # (R4) Use GitHub auto notes
+
+  # (R4) Whether to use GitHub auto notes
   USE_AUTO_NOTES: true
-  # (R5) Attach ephemeral .zip to release
+
+  # (R5) Whether to attach the .vip artifact to the release
   ATTACH_ARTIFACTS_TO_RELEASE: true
-  # (R9) Disable GPG signing on forks
+
+  # (R9) Whether to disable GPG signing on forks
   DISABLE_GPG_ON_FORKS: true
 
 jobs:
@@ -30,7 +33,7 @@ jobs:
     runs-on: [self-hosted, iconeditor]
 
     permissions:
-      contents: write         # needed to push tags & create releases
+      contents: write   # needed to push tags & create releases
       issues: read
       pull-requests: read
 
@@ -57,22 +60,22 @@ jobs:
             git config --global commit.gpgsign false
             git config --global tag.gpgsign false
           } else {
-            Write-Host "Official repo => no changes."
+            Write-Host "This is the official repo => no GPG changes."
             "old_commit_gpgsign=" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
             "old_tag_gpgsign="    | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           }
 
       ########################################################################
-      # 1) Checkout code (full depth)
+      # 1) Check out code (full depth)
       ########################################################################
       - name: Check out code
         uses: actions/checkout@v3
         with:
           persist-credentials: true
-          fetch-depth: 0
+          fetch-depth: 0   # we need the full commit history for commit-based build number
 
       ########################################################################
-      # 2) Determine bump type from PR labels
+      # 2) Determine bump type from PR labels (major/minor/patch), else none
       ########################################################################
       - name: Determine bump type
         id: bump_type
@@ -94,7 +97,7 @@ jobs:
               }
               core.setOutput('bump_type', bump);
             } else {
-              // direct push => fallback to 'none'
+              // For direct push => 'none'
               core.setOutput('bump_type', 'none');
             }
 
@@ -108,11 +111,12 @@ jobs:
           git fetch --unshallow 2>$null || Write-Host "Already full clone."
 
           $commitCount = git rev-list --count HEAD
-          Write-Host "Build number => $commitCount"
+          Write-Host "Commit-based build number => $commitCount"
+
           "new_build_number=$commitCount" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       ########################################################################
-      # 4) Parse latest version tag, apply bump if major/minor/patch
+      # 4) Parse version tag, apply major/minor/patch if found
       ########################################################################
       - name: Compute version string
         id: next_version
@@ -179,7 +183,7 @@ jobs:
           "PATCH=$newPatch"  | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       ########################################################################
-      # 5) Build the icon editor VI package using existing script params
+      # 5) Build the icon editor VI package, passing Major/Minor/Patch/Build/Commit
       ########################################################################
       - name: Build the icon editor VI package
         shell: pwsh
@@ -193,7 +197,7 @@ jobs:
           $repoRoot      = $env:GITHUB_WORKSPACE
           $scriptsFolder = Join-Path $repoRoot 'pipeline/scripts'
 
-          Write-Host "Building VI package with version => M:$($env:MAJOR), m:$($env:MINOR), p:$($env:PATCH), b:$($env:BUILD)"
+          Write-Host "Building VI package => MAJOR=$($env:MAJOR), MINOR=$($env:MINOR), PATCH=$($env:PATCH), BUILD=$($env:BUILD)"
 
           .\pipeline\scripts\Build.ps1 `
             -RelativePath        $repoRoot `
@@ -204,17 +208,12 @@ jobs:
             -Build               $env:BUILD `
             -Commit              $env:COMMIT
 
-          # Suppose the script produces a .vip in .\output\IconEditorPackage.vip
-          # Let's zip that for ephemeral artifact usage:
-          $zipName = "v$($env:MAJOR).$($env:MINOR).$($env:PATCH)-build$($env:BUILD).zip"
-          Write-Host "Zipping the .vip => $zipName"
-          Compress-Archive -Path ".\output\IconEditorPackage.vip" -DestinationPath $zipName
-          Write-Host "Created ephemeral artifact: $zipName"
+          # The .vip file is presumably in builds/VI Package/ after Build.ps1 completes
 
       ########################################################################
-      # 6) Upload ephemeral zip artifact (actions/upload-artifact@v4)
+      # 6) Upload ephemeral artifact (.vip) using actions/upload-artifact@v4
       ########################################################################
-      - name: Upload ephemeral zip artifact
+      - name: Upload ephemeral artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.next_version.outputs.VERSION }}
@@ -234,7 +233,7 @@ jobs:
           git push origin $VERSION
 
       ########################################################################
-      # 8) Create GitHub Release (draft_release = true by default, auto notes = true)
+      # 8) Create GitHub Release (draft=true & auto notes=true by default)
       ########################################################################
       - name: Create GitHub Release
         if: ${{ success() && github.event_name != 'pull_request' }}
@@ -259,7 +258,7 @@ jobs:
             if (useAutoNotes) {
               createParams.generate_release_notes = true;
             } else {
-              createParams.body = "Release notes are embedded in the .vip or refer to local doc.";
+              createParams.body = "See local release_notes.md or inside the .vip for details.";
             }
 
             const response = await github.rest.repos.createRelease(createParams);
@@ -267,15 +266,19 @@ jobs:
             core.info(`Created release [draft=${draftRelease}] => ${versionTag}`);
 
       ########################################################################
-      # 9) Attach ephemeral zip to Release (if ATTACH_ARTIFACTS_TO_RELEASE=true)
+      # 9) Attach ephemeral VIP to Release if ATTACH_ARTIFACTS_TO_RELEASE==true
       ########################################################################
-      - name: Attach ephemeral zip to Release
+      - name: Attach ephemeral vip to Release
         if: ${{ success() && env.ATTACH_ARTIFACTS_TO_RELEASE == 'true' && github.event_name != 'pull_request' }}
         shell: pwsh
         run: |
-          $files = Get-ChildItem -Path . -Filter "*.zip"
-          if ($files.Count -eq 0) {
-            Write-Warning "No zip files found to attach."
+          # The ephemeral .vip artifact is in "builds/VI Package/*.vip" from step #6
+          # Because it's ephemeral, we either need to re-download it or rely on it still existing in the workspace.
+          # If the self-hosted runner is the same machine, it might still exist at "builds/VI Package"
+          
+          $vipFiles = Get-ChildItem -Path "builds/VI Package" -Filter "*.vip" -ErrorAction SilentlyContinue
+          if (!$vipFiles) {
+            Write-Warning "No .vip file found in builds/VI Package to attach."
             exit 0
           }
 
@@ -285,13 +288,13 @@ jobs:
             exit 0
           }
 
-          foreach($f in $files) {
+          foreach($f in $vipFiles) {
             Write-Host "Attaching $($f.Name) to release => $uploadUrl"
-            gh api "$uploadUrl?name=$($f.Name)" -F "@$($f.Name)=application/octet-stream"
+            gh api "$uploadUrl?name=$($f.Name)" -F "@$($f.FullName)=application/octet-stream"
           }
 
       ########################################################################
-      # (B) Restore GPG signing if we disabled it
+      # (B) Re-enable GPG signing if we disabled it
       ########################################################################
       - name: Re-enable GPG signing (only if disabled)
         if: always() && env.DISABLE_GPG_ON_FORKS == 'true'
