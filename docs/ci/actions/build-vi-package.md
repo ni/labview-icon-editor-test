@@ -33,7 +33,7 @@ This document is designed to help maintainers, contributors, and engineers autom
    - [4.2 Version or Tagging Steps](#42-version-or-tagging-steps)
    - [4.3 Pre-Release vs. Final Release](#43-pre-release-vs-final-release)
 
----
+
 
 ## 1. **Overview and Purpose**
 
@@ -64,7 +64,7 @@ It eliminates confusion around versioning, keeps everything in one pipeline, and
 - **Fork-Friendly**: If the repo name indicates it’s not the official one, GPG signing toggles off.  
 - **Simplicity**: All steps—build, artifact upload, release creation—are in a single YAML file.
 
----
+
 
 ## 2. **Environment & Requirements**
 
@@ -91,7 +91,7 @@ It eliminates confusion around versioning, keeps everything in one pipeline, and
 - Disk space: Keep enough free space for intermediate build files. 
 - If your build is slow or times out, consider caching or incremental builds.
 
----
+
 
 ## 3. **Action Configuration & Usage**
 
@@ -123,7 +123,7 @@ It eliminates confusion around versioning, keeps everything in one pipeline, and
 - By default, the `.vip` is **uploaded** as an ephemeral artifact for that run.  
 - If `ATTACH_ARTIFACTS_TO_RELEASE` is true, it’s also added to the GitHub Release under “Assets” so users can access it any time.
 
----
+
 
 ## 4. **Workflow Details**
 
@@ -181,7 +181,7 @@ It eliminates confusion around versioning, keeps everything in one pipeline, and
 - Merging back to `main` typically yields a final version with no `-rc`.  
 - If `draft_release` is `true`, maintainers can manually convert a draft release to a final one after verifying assets or notes.
 
----
+
 
 ## 5. **Security & Permissions**
 
@@ -212,7 +212,7 @@ It eliminates confusion around versioning, keeps everything in one pipeline, and
 - By default, secrets like `GITHUB_TOKEN` are available only in limited capacity on PRs from external repos.  
 - GPG signing logic is automatically disabled for forks if you set `DISABLE_GPG_ON_FORKS` to `true`, preventing signing prompts or errors.
 
----
+
 
 ## 6. **Maintenance & Administration**
 
@@ -237,7 +237,7 @@ It eliminates confusion around versioning, keeps everything in one pipeline, and
   1. Document who can change the `.github/workflows/build-vi-package.yml` file.
   2. Decide if changes to the workflow require a PR review or certain status checks.
 
----
+
 
 ## 7. **Usage & Examples**
 
@@ -267,11 +267,11 @@ It eliminates confusion around versioning, keeps everything in one pipeline, and
 - **Action**: Provide any input parameters (if configured), or rely on defaults like `none` for version bump.
 - **Result**: The script runs as if it were a push event, producing a tag & release if not a PR context.
 
----
+
 
 ## 8. **Testing & Verification**
 
----
+
 
 ### 8.1 Fork Testing
 1. **Fork the Repo**: Copy `.github/workflows/build-vi-package.yml` to your fork.  
@@ -296,7 +296,6 @@ It eliminates confusion around versioning, keeps everything in one pipeline, and
 ### 8.4 Checking GPG Toggle
 - If your fork is named differently (e.g., `username/lv-icon-fork`), confirm `DISABLE_GPG_ON_FORKS=true` toggles off commit/tag signing. Look for a step titled “Possibly disable GPG signing on forks” in your logs.
 
----
 
 ## 9. **Troubleshooting**
 
@@ -326,7 +325,7 @@ It eliminates confusion around versioning, keeps everything in one pipeline, and
 - For general build or GPG issues, consult NI or LabVIEW community forums.  
 - For GitHub Actions or workflow YAML syntax, check official GitHub Docs or open an issue on your repo.
 
----
+
 
 ## 10. **FAQ**
 
@@ -342,7 +341,17 @@ It eliminates confusion around versioning, keeps everything in one pipeline, and
 **Q:** *Do I still need to manually publish the release if it’s a pre-release?*  
 **A:** If `DRAFT_RELEASE` is true, you’ll need to “publish” it from draft. If it’s a `-rc` suffix, that’s just a naming convention, but you can finalize or remove that suffix in a subsequent version.
 
----
+**Q:** How do I override build number or forcibly skip a release?  
+**A:** By default, we rely on `git rev-list --count HEAD`. You can change it by passing a custom environment variable or skipping the tag steps.
+
+**Q:** Does it support alpha/beta channels out of the box?  
+**A:** You can parse more branch patterns (e.g. `release-alpha/*`) and set a suffix like `-alpha.<N>`. The logic is easily adapted in the “Compute version string” step.
+
+**Q:** What about manual triggers?  
+**A:** If `workflow_dispatch` is enabled, you can run it from the Actions tab, typically defaulting to the same logic (`none` for bump).
+
+**Q:** Where do I see ephemeral artifacts?  
+**A:** In the Actions run logs. Look for the “Artifacts” section. If you attach the `.vip` to the release, it’s permanent under “Assets” in the Release page.
 
 ## 11. **Conclusion**
 
