@@ -1,51 +1,309 @@
 name: Build VI Package
 
 on:
-  pull_request:
-    branches: [main, develop, release/*, hotfix/*]
-    types: [opened, synchronize, reopened, ready_for_review]
   push:
-    branches: [main, develop, release/*, hotfix/*]
+    branches:
+      - main
+      - develop
+      - release/*
+      - hotfix/*
+  pull_request:
+    branches:
+      - main
+      - develop
+      - release/*
+      - hotfix/*
   workflow_dispatch:
 
 jobs:
-  build-vi-package:
-    name: Build VI Package
+  build-release:
     runs-on: [self-hosted, iconeditor]
 
+    permissions:
+      contents: write   # needed to push tags & create releases
+      issues: read
+      pull-requests: read
+
     steps:
-      - name: Checkout code
+      ########################################################################
+      # (A) DISABLE GPG SIGNING IF WE'RE ON A FORK (NOT 'ni/labview-icon-editor')
+      ########################################################################
+      - name: Disable GPG signing (only on forks)
+        if: ${{ github.repository != 'ni/labview-icon-editor' }}
+        id: disable_signing
+        shell: pwsh
+        run: |
+          Write-Host "Detected fork; temporarily disabling GPG signing..."
+
+          # Grab current config (if set) for commit and tag
+          $currentCommitGpgsign = git config --global commit.gpgsign
+          if (-not $currentCommitGpgsign) { $currentCommitGpgsign = "" }
+
+          $currentTagGpgsign = git config --global tag.gpgsign
+          if (-not $currentTagGpgsign) { $currentTagGpgsign = "" }
+
+          Write-Host "Found commit.gpgsign=$currentCommitGpgsign"
+          Write-Host "Found tag.gpgsign=$currentTagGpgsign"
+
+          # Make them available as step outputs
+          # Use $env:GITHUB_OUTPUT to set outputs in PowerShell
+          "commit_gpgsign=$currentCommitGpgsign" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "tag_gpgsign=$currentTagGpgsign"       | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+          # Disable GPG signing for commits & tags
+          git config --global commit.gpgsign false
+          git config --global tag.gpgsign false
+
+      ########################################################################
+      # 1) CHECK OUT CODE
+      ########################################################################
+      - name: Check out code
         uses: actions/checkout@v3
+        with:
+          persist-credentials: true
+          fetch-depth: 0  # we need full tag history
 
-      - name: Get Build Revision
-        id: get_revision
+      ########################################################################
+      # 2) LABEL ENFORCEMENT (Pull Request only)
+      ########################################################################
+      - name: Validate version bump label
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const labels = context.payload.pull_request.labels.map(l => l.name.toLowerCase());
+            const allowed = ['major', 'minor', 'patch'];
+            const intersection = labels.filter(l => allowed.includes(l));
+
+            if (intersection.length === 0) {
+              core.setFailed(`No valid version label found. Must have one of: ${allowed.join(', ')}`);
+            } else {
+              core.info(`Found valid label(s): ${intersection.join(', ')}`);
+            }
+
+      ########################################################################
+      # 3) DETERMINE BUMP TYPE (major/minor/patch)
+      #    If push is not a PR, default to 'patch'
+      ########################################################################
+      - name: Determine bump type
+        id: bump_type
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            if (context.event_name === 'pull_request') {
+              const labels = context.payload.pull_request.labels.map(l => l.name.toLowerCase());
+              core.info(`Found labels on PR: ${labels.join(', ')}`);
+
+              let bump = 'patch'; // fallback if no label
+              if (labels.includes('major')) bump = 'major';
+              else if (labels.includes('minor')) bump = 'minor';
+              else if (labels.includes('patch')) bump = 'patch';
+              core.setOutput('bump_type', bump);
+            } else {
+              // Direct push => default patch
+              core.setOutput('bump_type', 'patch');
+            }
+
+      ########################################################################
+      # 4) COMPUTE GLOBAL BUILD NUMBER (TAG COUNT) VIA POWERSHELL
+      ########################################################################
+      - name: Determine global build number
+        id: inc_build
         shell: pwsh
         run: |
-          $COUNTER_FILE = "$env:GITHUB_WORKSPACE/.github/buildCounter.txt"
-          if (-Not (Test-Path $COUNTER_FILE)) {
-            "1" | Out-File $COUNTER_FILE
-          }
-          $build_revision = Get-Content $COUNTER_FILE
-          $new_build_revision = [int]$build_revision + 1
-          $new_build_revision | Out-File $COUNTER_FILE
-          echo "build_revision=$new_build_revision" >> $env:GITHUB_OUTPUT
+          # List all tags matching 'v*.*.*-build*'
+          $allTags = git tag --list 'v*.*.*-build*'
+          # Split the result by lines
+          $tagArray = $allTags -split "`r?`n"
+          $tagArray = $tagArray | Where-Object { $_ -ne "" }
 
-      - name: Build the icon editor VI package
+          # The global build number is (# of matching tags) + 1
+          $count = $tagArray.Count
+          $newBuild = $count + 1
+
+          Write-Host "Computed new build number => $newBuild"
+          # Output to GITHUB_OUTPUT
+          "new_build_number=$newBuild" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      ########################################################################
+      # 5) COMPUTE NEXT SEMVER (RELEASE/* => RC, HOTFIX => FINAL)
+      ########################################################################
+      - name: Compute version string
+        id: next_version
         shell: pwsh
-        # GitHub sets $GITHUB_WORKSPACE automatically
         env:
-          build_id: ${{ github.run_number }}
-          build_revision: ${{ steps.get_revision.outputs.build_revision }}
-          build_version: 1.0.${{ github.run_number }}.${{ steps.get_revision.outputs.build_revision }}
+          BUMP_TYPE: ${{ steps.bump_type.outputs.bump_type }}
+          BUILD_NUMBER: ${{ steps.inc_build.outputs.new_build_number }}
         run: |
-          $repoRoot = $env:GITHUB_WORKSPACE
+          Write-Host "Bump type: $($env:BUMP_TYPE)"
+          Write-Host "Global build number: $($env:BUILD_NUMBER)"
+
+          $branchName = $env:GITHUB_REF -split '/' | Select-Object -Last 1
+          Write-Host "Branch name is: $branchName"
+
+          # 1) Find latest stable tag => e.g. "v1.2.3-build45"
+          $latestTag = git tag --list 'v*.*.*-build*' | Sort-Object -Descending | Select-Object -First 1
+          if ([string]::IsNullOrEmpty($latestTag)) {
+            $baseMajor = 0
+            $baseMinor = 0
+            $basePatch = 0
+          }
+          else {
+            # remove 'v'
+            $tagNoPrefix = $latestTag.TrimStart('v')
+            # e.g. from "1.2.3-build45" => "1.2.3"
+            $versionPart = $tagNoPrefix -replace '-build.*',''
+            $baseMajor, $baseMinor, $basePatch = $versionPart.Split('.')
+          }
+
+          $newMajor = [int]$baseMajor
+          $newMinor = [int]$baseMinor
+          $newPatch = [int]$basePatch
+
+          switch ($env:BUMP_TYPE) {
+            'major' {
+              $newMajor++
+              $newMinor = 0
+              $newPatch = 0
+            }
+            'minor' {
+              $newMinor++
+              $newPatch = 0
+            }
+            'patch' {
+              $newPatch++
+            }
+          }
+
+          # 2) If branch is release/* => produce -rc.<N>
+          $rcSuffix = ""
+          if ($branchName -like 'release/*') {
+            $commitsCount = git rev-list --count HEAD ^origin/develop 2>$null
+            if ([string]::IsNullOrEmpty($commitsCount)) { $commitsCount = 1 }
+            $rcSuffix = "rc.$commitsCount"
+          }
+          elseif ($branchName -like 'hotfix/*' -or $branchName -eq 'main') {
+            $rcSuffix = ""
+          }
+
+          if ([string]::IsNullOrEmpty($rcSuffix)) {
+            $version = "v$($newMajor).$($newMinor).$($newPatch)-build$($env:BUILD_NUMBER)"
+            $isPrerelease = "false"
+          }
+          else {
+            $version = "v$($newMajor).$($newMinor).$($newPatch)-$rcSuffix-build$($env:BUILD_NUMBER)"
+            $isPrerelease = "true"
+          }
+
+          Write-Host "Computed version => $version"
+
+          "VERSION=$version"        | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "IS_PRERELEASE=$isPrerelease" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "MAJOR=$newMajor"         | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "MINOR=$newMinor"         | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "PATCH=$newPatch"         | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      ########################################################################
+      # 6) CREATE & PUSH NEW TAG (only if NOT a PR)
+      ########################################################################
+      - name: Create & push tag
+        if: ${{ github.event_name != 'pull_request' }}
+        shell: pwsh
+        run: |
+          $VERSION = "${{ steps.next_version.outputs.VERSION }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git tag -a $VERSION -m "Auto-tag by CI for $VERSION"
+          git push origin $VERSION
+
+      ########################################################################
+      # 7) BUILD VI PACKAGE
+      ########################################################################
+      - name: Build the icon editor VI package
+        if: ${{ success() }}
+        shell: pwsh
+        env:
+          MAJOR: ${{ steps.next_version.outputs.MAJOR }}
+          MINOR: ${{ steps.next_version.outputs.MINOR }}
+          PATCH: ${{ steps.next_version.outputs.PATCH }}
+          BUILD: ${{ steps.inc_build.outputs.new_build_number }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          $repoRoot      = $env:GITHUB_WORKSPACE
           $scriptsFolder = Join-Path $repoRoot 'pipeline/scripts'
 
-          # Call the script with defaulted paths
-          .\pipeline\scripts\Build_all.ps1 -RelativePath $repoRoot -AbsolutePathScripts $scriptsFolder
+          Write-Host "Semantic Version: $($env:MAJOR).$($env:MINOR).$($env:PATCH).$($env:BUILD)"
+          Write-Host "Commit: $($env:COMMIT)"
 
-      - name: Upload build artifact
+          .\pipeline\scripts\Build.ps1 `
+            -RelativePath        $repoRoot `
+            -AbsolutePathScripts $scriptsFolder `
+            -Major               $env:MAJOR `
+            -Minor               $env:MINOR `
+            -Patch               $env:PATCH `
+            -Build               $env:BUILD `
+            -Commit              $env:COMMIT
+
+      ########################################################################
+      # 8) UPLOAD ARTIFACT
+      ########################################################################
+      - name: Upload VIP artifact
+        if: ${{ success() }}
         uses: actions/upload-artifact@v4
         with:
-          name: vi-package
-          path: 'builds/VI Package'
+          name: ${{ steps.next_version.outputs.VERSION }}
+          path: "builds/VI Package/*.vip"
+
+      ########################################################################
+      # 9) CREATE GITHUB RELEASE (PRE-RELEASE IF 'rc')
+      ########################################################################
+      - name: Create GitHub Release
+        if: ${{ success() && github.event_name != 'pull_request' }}
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const versionTag = '${{ steps.next_version.outputs.VERSION }}';
+            const isPrerelease = ('${{ steps.next_version.outputs.IS_PRERELEASE }}' === 'true');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            await github.rest.repos.createRelease({
+              owner,
+              repo,
+              tag_name: versionTag,
+              name: versionTag,
+              prerelease: isPrerelease
+            });
+
+            core.info(`Created ${isPrerelease ? 'pre-release' : 'final release'} for tag: ${versionTag}`);
+
+      ########################################################################
+      # (B) RE-ENABLE GPG SIGNING IF WE DISABLED IT
+      ########################################################################
+      - name: Re-enable GPG signing (only on forks)
+        if: always() && github.repository != 'ni/labview-icon-editor'
+        shell: pwsh
+        run: |
+          Write-Host "Restoring GPG signing to previous config..."
+
+          $oldCommitGpgsign = '${{ steps.disable_signing.outputs.commit_gpgsign }}'
+          $oldTagGpgsign    = '${{ steps.disable_signing.outputs.tag_gpgsign }}'
+
+          Write-Host "Previous commit.gpgsign = $oldCommitGpgsign"
+          Write-Host "Previous tag.gpgsign    = $oldTagGpgsign"
+
+          if ($oldCommitGpgsign) {
+            git config --global commit.gpgsign $oldCommitGpgsign
+          } else {
+            git config --global --unset commit.gpgsign || Write-Host "commit.gpgsign was not set."
+          }
+
+          if ($oldTagGpgsign) {
+            git config --global tag.gpgsign $oldTagGpgsign
+          } else {
+            git config --global --unset tag.gpgsign || Write-Host "tag.gpgsign was not set."
+          }
