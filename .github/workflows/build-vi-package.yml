@@ -16,22 +16,19 @@ on:
   workflow_dispatch:
 
 env:
-  # (R1) Whether to create draft releases by default
   DRAFT_RELEASE: true
 
   # (R4) Whether to use GitHub auto notes
   USE_AUTO_NOTES: true
-
   # (R5) Whether to attach the .vip to the release
-  ATTACH_ARTIFACTS_TO_RELEASE: true
 
   # (R9) Disable GPG signing on forks
-  DISABLE_GPG_ON_FORKS: true
 
 jobs:
   build-release:
     runs-on: [self-hosted, iconeditor]
-
+    # This workflow requires a self-hosted runner with the 'iconeditor' label.
+    runs-on: [self-hosted, iconeditor]
     permissions:
       contents: write
       issues: read
@@ -41,7 +38,7 @@ jobs:
       ########################################################################
       # A) Possibly disable GPG signing on forks
       ########################################################################
-      - name: Check if we disable GPG signing on forks
+        if: ${{ env.DISABLE_GPG_ON_FORKS == 'true' }}
         if: env.DISABLE_GPG_ON_FORKS == 'true'
         id: disable_signing
         shell: pwsh
@@ -97,7 +94,7 @@ jobs:
               }
               core.setOutput('bump_type', bump);
             } else {
-              // For direct push => 'none'
+              // For direct pushes, there are no labels to determine the bump type, so we set it to 'none'
               core.setOutput('bump_type', 'none');
             }
 
@@ -128,7 +125,7 @@ jobs:
           Write-Host "Bump type: $($env:BUMP_TYPE)"
           Write-Host "Build number: $($env:BUILD_NUMBER)"
 
-          $latestTag = git tag --list 'v*.*.*-build*' | Sort-Object -Descending | Select-Object -First 1
+          $latestTag = git describe --tags --abbrev=0
           if ([string]::IsNullOrEmpty($latestTag)) {
             $baseMajor = 0
             $baseMinor = 0
@@ -285,47 +282,47 @@ jobs:
       # 10) Attach ephemeral .vip to Release (if ATTACH_ARTIFACTS_TO_RELEASE==true)
       ########################################################################
       - name: Attach .vip to Release
-      if: ${{ success() && env.ATTACH_ARTIFACTS_TO_RELEASE == 'true' && github.event_name != 'pull_request' }}
-      shell: pwsh
-      run: |
-        $vipPath = '${{ steps.find_vip.outputs.vip_path }}'
-        if (-not (Test-Path $vipPath)) {
-          Write-Warning "VIP file not found at $vipPath"
-          exit 0
-        }
-    
-        $uploadUrl = '${{ steps.create_release.outputs.upload_url }}'
-        if (-not $uploadUrl) {
-          Write-Warning "No upload_url from create_release step."
-          exit 0
-        }
-    
-        # 1) Split at '{' and keep the part before it
-        $uploadUrlClean = $uploadUrl.Split('{')[0]
-    
-        $fileName = [System.IO.Path]::GetFileName($vipPath)
-        $uri = "$uploadUrlClean?name=$fileName"
-    
-        Write-Host "Attaching $vipPath => $uri"
-    
-        # 2) Prepare headers for GitHub API
-        $headers = @{
-          "Authorization" = "Bearer $env:GITHUB_TOKEN"
-          "Content-Type"  = "application/octet-stream"
-        }
-    
-        # 3) Use Invoke-RestMethod to POST the file
-        Invoke-RestMethod `
-          -Uri $uri `
-          -Method POST `
-          -Headers $headers `
-          -InFile $vipPath
+        if: ${{ success() && env.ATTACH_ARTIFACTS_TO_RELEASE == 'true' && github.event_name != 'pull_request' }}
+        shell: pwsh
+        run: |
+          $vipPath = '${{ steps.find_vip.outputs.vip_path }}'
+          if (-not (Test-Path $vipPath)) {
+            Write-Warning "VIP file not found at $vipPath"
+            exit 0
+          }
+      
+          $uploadUrl = '${{ steps.create_release.outputs.upload_url }}'
+          if (-not $uploadUrl) {
+            Write-Warning "No upload_url from create_release step."
+            exit 0
+          }
+      
+          # 1) Split at '{' and keep the part before it
+          $uploadUrlClean = $uploadUrl.Split('{')[0]
+      
+          $fileName = [System.IO.Path]::GetFileName($vipPath)
+          $uri = "$uploadUrlClean?name=$fileName"
+      
+          Write-Host "Attaching $vipPath => $uri"
+      
+          # 2) Prepare headers for GitHub API
+          $headers = @{
+            "Authorization" = "Bearer $env:GITHUB_TOKEN"
+            "Content-Type"  = "application/octet-stream"
+          }
+      
+          # 3) Use Invoke-RestMethod to POST the file
+          Invoke-RestMethod `
+            -Uri $uri `
+            -Method POST `
+            -Headers $headers `
+            -InFile $vipPath
 
       ########################################################################
       # (B) Re-enable GPG signing if it was disabled
       ########################################################################
       - name: Re-enable GPG signing (if disabled)
-        if: always() && env.DISABLE_GPG_ON_FORKS == 'true'
+        if: ${{ always() && env.DISABLE_GPG_ON_FORKS == 'true' }}
         shell: pwsh
         run: |
           if ("${{ github.repository }}" -ne "ni/labview-icon-editor-test") {
