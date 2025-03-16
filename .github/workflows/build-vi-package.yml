@@ -21,7 +21,7 @@ env:
   # (R9) Disable GPG signing on forks (set to 'true' if you want the step to run)
   DISABLE_GPG_ON_FORKS: false
   # (R5) Whether to attach the .vip to the release (set to 'true' if desired)
-  ATTACH_ARTIFACTS_TO_RELEASE: false
+  ATTACH_ARTIFACTS_TO_RELEASE: true
 
 jobs:
   build-release:
