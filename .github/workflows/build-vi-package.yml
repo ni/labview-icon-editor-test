@@ -27,7 +27,7 @@ env:
   # (R5) Whether to attach the ephemeral .zip (containing the .vip) to the release
   ATTACH_ARTIFACTS_TO_RELEASE: true
 
-  # (R9) Whether to disable GPG signing on forks by default 
+  # (R9) Whether to disable GPG signing on forks by default
   DISABLE_GPG_ON_FORKS: true
 
 jobs:
@@ -238,7 +238,7 @@ jobs:
       # 6) UPLOAD THE ZIP AS AN ACTION ARTIFACT (even if not attaching to release)
       ########################################################################
       - name: Upload ephemeral zip artifact
-        uses: actions/upload-artifact@V4
+        uses: actions/upload-artifact@v3
         with:
           name: ${{ steps.next_version.outputs.VERSION }}
           path: "*.zip"
