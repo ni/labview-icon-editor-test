@@ -80,7 +80,7 @@ Below are the **key GitHub Actions** provided in this repository:
    - Invokes `Set_Development_Mode.ps1` or `RevertDevelopmentMode.ps1`.  
    - Usually triggered via `workflow_dispatch` for manual toggling.
 
-2. **[Build VI Package & Release](https://github.com/ni/labview-icon-editor/actions/workflows/build-vi-package.yml)**  
+2. **[Build and Release VI Package](https://github.com/ni/labview-icon-editor/actions/workflows/build-release-vi-package.yml)**  
    - **Automatically** versions your code based on PR labels (`major`, `minor`, `patch`) or defaults to `patch` for direct pushes.  
    - Uses a **build counter** to ensure each artifact is uniquely numbered (e.g., `v1.2.3-build4`).  
    - **Fork-Friendly**: Disables GPG signing if it detects a fork (so no passphrase is needed). In the **main repo** (`ni/labview-icon-editor`), signing remains active.  
@@ -126,7 +126,7 @@ Although GitHub Actions primarily runs on GitHub-hosted or self-hosted agents, y
    - You can manually invoke `Build.ps1` from `pipeline/scripts` to generate a `.vip`.  
    - On GitHub Actions, the workflow will produce and upload the artifact automatically.
 
-4. **(Mandatory to be able to install the VI Package) Disable Dev Mode**:  
+4. **Disable Dev Mode (Mandatory to be able to install the VI Package)**:  
    - Revert to a normal LabVIEW environment so standard usage or testing can resume.
 
 ---

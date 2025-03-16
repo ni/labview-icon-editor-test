@@ -1,5 +1,5 @@
 
-# **LabVIEW Icon Editor CI/CD Workflow – Getting Started Guide**
+# ** Getting Started Guide**
 
 This **Getting Started Guide** introduces a streamlined GitHub Action for building and releasing the **LabVIEW Icon Editor**. It automates versioning via **Pull Request labels**, assigns a **build number** based on total commits, optionally **attaches** the built `.vip` to a GitHub Release, and can **disable GPG** signing for forks.
 
@@ -183,5 +183,5 @@ The following gives experienced users a **concise reference** for how each major
    - The steps use PowerShell scripts. Typically works on Windows self-hosted runners. For Linux or Mac, adapt the `.ps1` calls or ensure the runner has PowerShell installed.
 
 This **Revision Alpha** approach to the LabVIEW Icon Editor CI/CD Workflow ensures a robust, **commit-based** build number, straightforward label-based semantic version bumps, optional GPG logic for forks, and an easy toggle to attach the `.vip` artifact to your GitHub Releases. If you follow the steps above, you can easily maintain and extend this pipeline to suit future needs.
-```
+
 
