@@ -22,10 +22,10 @@ env:
   # (R4) Whether to use GitHub auto notes
   USE_AUTO_NOTES: true
 
-  # (R5) Whether to attach the .vip artifact to the release
+  # (R5) Whether to attach the .vip to the release
   ATTACH_ARTIFACTS_TO_RELEASE: true
 
-  # (R9) Whether to disable GPG signing on forks
+  # (R9) Disable GPG signing on forks
   DISABLE_GPG_ON_FORKS: true
 
 jobs:
@@ -33,13 +33,13 @@ jobs:
     runs-on: [self-hosted, iconeditor]
 
     permissions:
-      contents: write   # needed to push tags & create releases
+      contents: write
       issues: read
       pull-requests: read
 
     steps:
       ########################################################################
-      # (A) Possibly disable GPG signing on forks
+      # A) Possibly disable GPG signing on forks
       ########################################################################
       - name: Check if we disable GPG signing on forks
         if: env.DISABLE_GPG_ON_FORKS == 'true'
@@ -72,10 +72,10 @@ jobs:
         uses: actions/checkout@v3
         with:
           persist-credentials: true
-          fetch-depth: 0   # we need the full commit history for commit-based build number
+          fetch-depth: 0
 
       ########################################################################
-      # 2) Determine bump type from PR labels (major/minor/patch), else none
+      # 2) Determine bump type from labels (major/minor/patch), else none
       ########################################################################
       - name: Determine bump type
         id: bump_type
@@ -116,7 +116,7 @@ jobs:
           "new_build_number=$commitCount" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       ########################################################################
-      # 4) Parse version tag, apply major/minor/patch if found
+      # 4) Parse latest version tag, apply major/minor/patch if found
       ########################################################################
       - name: Compute version string
         id: next_version
@@ -177,13 +177,13 @@ jobs:
           }
 
           Write-Host "Computed version => $version"
-          "VERSION=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          "MAJOR=$newMajor"  | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          "MINOR=$newMinor"  | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          "PATCH=$newPatch"  | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "VERSION=$version"   | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "MAJOR=$newMajor"    | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "MINOR=$newMinor"    | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "PATCH=$newPatch"    | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       ########################################################################
-      # 5) Build the icon editor VI package, passing Major/Minor/Patch/Build/Commit
+      # 5) Build the icon editor VI package, passing correct param set
       ########################################################################
       - name: Build the icon editor VI package
         shell: pwsh
@@ -208,19 +208,35 @@ jobs:
             -Build               $env:BUILD `
             -Commit              $env:COMMIT
 
-          # The .vip file is presumably in builds/VI Package/ after Build.ps1 completes
+          # The .vip file is now in builds/VI Package/*.vip
 
       ########################################################################
-      # 6) Upload ephemeral artifact (.vip) using actions/upload-artifact@v4
+      # 6) Capture the .vip file path as a step output => source of truth
+      ########################################################################
+      - name: Discover .vip path
+        id: find_vip
+        shell: pwsh
+        run: |
+          $vipFile = Get-ChildItem -Path "builds/VI Package" -Filter "*.vip" -ErrorAction Stop | Select-Object -First 1
+          if (-not $vipFile) {
+            Write-Host "No .vip file found in builds/VI Package!"
+            exit 1
+          }
+          Write-Host "Discovered VIP File: $($vipFile.FullName)"
+          # Set output for downstream steps
+          "vip_path=$($vipFile.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      ########################################################################
+      # 7) Upload ephemeral artifact (the .vip file)
       ########################################################################
       - name: Upload ephemeral artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.next_version.outputs.VERSION }}
-          path: "builds/VI Package/*.vip"
+          path: ${{ steps.find_vip.outputs.vip_path }}
 
       ########################################################################
-      # 7) Create & push tag (skip if it's a PR)
+      # 8) Create & push tag (skip if it's a PR)
       ########################################################################
       - name: Create & push tag
         if: ${{ github.event_name != 'pull_request' }}
@@ -233,7 +249,7 @@ jobs:
           git push origin $VERSION
 
       ########################################################################
-      # 8) Create GitHub Release (draft=true & auto notes=true by default)
+      # 9) Create GitHub Release
       ########################################################################
       - name: Create GitHub Release
         if: ${{ success() && github.event_name != 'pull_request' }}
@@ -258,7 +274,7 @@ jobs:
             if (useAutoNotes) {
               createParams.generate_release_notes = true;
             } else {
-              createParams.body = "See local release_notes.md or inside the .vip for details.";
+              createParams.body = "Reference local release notes or embed within .vip.";
             }
 
             const response = await github.rest.repos.createRelease(createParams);
@@ -266,37 +282,32 @@ jobs:
             core.info(`Created release [draft=${draftRelease}] => ${versionTag}`);
 
       ########################################################################
-      # 9) Attach ephemeral VIP to Release if ATTACH_ARTIFACTS_TO_RELEASE==true
+      # 10) Attach ephemeral .vip to Release (if ATTACH_ARTIFACTS_TO_RELEASE==true)
       ########################################################################
-      - name: Attach ephemeral vip to Release
+      - name: Attach .vip to Release
         if: ${{ success() && env.ATTACH_ARTIFACTS_TO_RELEASE == 'true' && github.event_name != 'pull_request' }}
         shell: pwsh
         run: |
-          # The ephemeral .vip artifact is in "builds/VI Package/*.vip" from step #6
-          # Because it's ephemeral, we either need to re-download it or rely on it still existing in the workspace.
-          # If the self-hosted runner is the same machine, it might still exist at "builds/VI Package"
-          
-          $vipFiles = Get-ChildItem -Path "builds/VI Package" -Filter "*.vip" -ErrorAction SilentlyContinue
-          if (!$vipFiles) {
-            Write-Warning "No .vip file found in builds/VI Package to attach."
+          $vipPath = '${{ steps.find_vip.outputs.vip_path }}'
+          if (-not (Test-Path $vipPath)) {
+            Write-Warning "VIP file not found at $vipPath"
             exit 0
           }
-
+          
           $uploadUrl = '${{ steps.create_release.outputs.upload_url }}'
           if (-not $uploadUrl) {
             Write-Warning "No upload_url from create_release step."
             exit 0
           }
 
-          foreach($f in $vipFiles) {
-            Write-Host "Attaching $($f.Name) to release => $uploadUrl"
-            gh api "$uploadUrl?name=$($f.Name)" -F "@$($f.FullName)=application/octet-stream"
-          }
+          $fileName = [System.IO.Path]::GetFileName($vipPath)
+          Write-Host "Attaching $vipPath => $uploadUrl"
+          gh api "$uploadUrl?name=$fileName" -F "@$vipPath=application/octet-stream"
 
       ########################################################################
-      # (B) Re-enable GPG signing if we disabled it
+      # (B) Re-enable GPG signing if it was disabled
       ########################################################################
-      - name: Re-enable GPG signing (only if disabled)
+      - name: Re-enable GPG signing (if disabled)
         if: always() && env.DISABLE_GPG_ON_FORKS == 'true'
         shell: pwsh
         run: |
@@ -308,13 +319,13 @@ jobs:
             if ($oldCommitGpgsign) {
               git config --global commit.gpgsign $oldCommitGpgsign
             } else {
-              git config --global --unset commit.gpgsign || Write-Host "commit.gpgsign was not originally set."
+              git config --global --unset commit.gpgsign || Write-Host "commit.gpgsign wasn't originally set."
             }
 
             if ($oldTagGpgsign) {
               git config --global tag.gpgsign $oldTagGpgsign
             } else {
-              git config --global --unset tag.gpgsign || Write-Host "tag.gpgsign was not originally set."
+              git config --global --unset tag.gpgsign || Write-Host "tag.gpgsign wasn't originally set."
             }
           } else {
             Write-Host "Official repo or DISABLE_GPG_ON_FORKS==false => no restore needed."
