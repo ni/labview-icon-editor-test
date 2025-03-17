@@ -5,7 +5,7 @@
 
 
 ## Overview
-This repository hosts the source for the **LabVIEW Icon Editor**. It includes PowerShell tooling to streamline CI/CD and packaging, plus reference workflows for **GitHub Actions** and **self-hosted runners**. Our goal is to collaborate with fellow software engineers to evolve and improve this solution.
+This repository hosts the source for the **LabVIEW Icon Editor**. It includes PowerShell tooling to streamline CI/CD and packaging, plus reference workflows for **GitHub Actions** and **self-hosted runners**. Our goal is to collaborate with fellow software engineers to evolve and improve this solution
 
 
 
