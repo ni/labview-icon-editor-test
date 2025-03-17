@@ -34,12 +34,15 @@ jobs:
       pull-requests: read
 
     steps:
+      ########################################################################
+      # A) Possibly disable GPG signing on forks
+      ########################################################################
       - name: Possibly disable GPG signing on forks
         if: ${{ env.DISABLE_GPG_ON_FORKS == 'true' }}
         id: disable_signing
         shell: pwsh
         run: |
-          if ("${{ github.repository }}" -ne "ni/labview-icon-editor-test") {
+          if ("${{ github.repository }}" -ne "ni/labview-icon-editor") {
             Write-Host "Detected a fork; disabling GPG signing..."
             $currentCommitGpgsign = git config --global commit.gpgsign
             if (-not $currentCommitGpgsign) { $currentCommitGpgsign = "" }
@@ -381,7 +384,7 @@ jobs:
         if: ${{ always() && env.DISABLE_GPG_ON_FORKS == 'true' }}
         shell: pwsh
         run: |
-          if ("${{ github.repository }}" -ne "ni/labview-icon-editor-test") {
+          if ("${{ github.repository }}" -ne "ni/labview-icon-editor") {
             Write-Host "Restoring GPG signing..."
             $oldCommitGpgsign = '${{ steps.disable_signing.outputs.old_commit_gpgsign }}'
             $oldTagGpgsign    = '${{ steps.disable_signing.outputs.old_tag_gpgsign }}'
