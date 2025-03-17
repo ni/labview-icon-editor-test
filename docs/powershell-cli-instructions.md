@@ -1,6 +1,6 @@
-# Automated Setup & Editing Instructions
+# Powershell Command Line Interface Instructions
 
-This document describes how to **build, test, and distribute** the **LabVIEW Icon Editor** using **PowerShell**. You can run these scripts locally on your development or self-hosted runner, or within **GitHub Actions**. By making this process open source, we enable community collaboration, easier troubleshooting, and a more transparent build pipeline for the Icon Editor that ships with LabVIEW.
+This document describes how to **build, test, and distribute** the **LabVIEW Icon Editor** VI Package using **PowerShell**. You can run these scripts locally on your development or self-hosted runner, or within **GitHub Actions**. By making this process open source, we enable community collaboration, easier troubleshooting, and a more transparent build pipeline for the Icon Editor that ships with LabVIEW.
 ## Table of Contents
 
 1. [Overview & Prerequisites](#overview--prerequisites)

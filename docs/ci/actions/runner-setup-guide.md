@@ -1,12 +1,6 @@
-# LabVIEW Icon Editor GitHub Actions (Local Setup Guide) [**Updated**]
+# Runner Setup Guide
 
-This **updated** guide explains how to locally set up and run the **LabVIEW Icon Editor** workflows on a **self-hosted runner** using **GitHub Actions**. It replaces older references (like `ICON_BUILD_INFO` and incremental counters) with a **new approach** leveraging:
-
-- **Label-Based Versioning** for semantic bumps (`major`, `minor`, `patch`).  
-- A **Global Build Number** found by scanning existing tags (`v*.*.*-build*`).  
-- **Fork-Friendly** GPG signing: signing is enabled on the main repo but disabled on forks to avoid passphrase prompts.  
-
----
+This document explains how to locally set up and run the **LabVIEW Icon Editor** workflows on a **self-hosted runner** using **GitHub Actions**.
 
 ## Table of Contents
 
@@ -19,8 +13,6 @@ This **updated** guide explains how to locally set up and run the **LabVIEW Icon
    4. [Running the Actions Locally](#running-the-actions-locally)  
    5. [Example Developer Workflow](#example-developer-workflow)  
 4. [Next Steps](#next-steps)
-
----
 
 <a name="introduction"></a>
 ## 1. Introduction
@@ -38,8 +30,6 @@ This document details how to automate **building**, **testing**, and **packaging
 > - The relevant **VIPC** file is now at `Tooling/deployment/runner_dependencies.vipc`.  
 > - [PowerShell 7+](https://github.com/PowerShell/PowerShell/releases/latest)  
 > - [Git for Windows](https://github.com/git-for-windows/git/releases/latest)
-
----
 
 <a name="quickstart"></a>
 ## 2. Quickstart
@@ -70,7 +60,6 @@ This document details how to automate **building**, **testing**, and **packaging
 7. **Disable Dev Mode** (Optional)  
    - Revert environment once building/testing is done.
 
----
 
 <a name="detailed-guide"></a>
 ## 3. Detailed Guide
@@ -79,14 +68,13 @@ This document details how to automate **building**, **testing**, and **packaging
 ### 1. Development vs. Testing
 
 **Development Mode**  
-- Temporarily reconfigures `labview.ini` and `vi.lib` so LabVIEW loads your Icon Editor source directly.  
+- Temporarily reconfigures `labview.ini` and `vi.lib` so LabVIEW loads your Icon Editor source directly, it also removes `lv_icon.lvlibp`.  
 - Enable/disable via the **Development Mode Toggle** workflow.
 
 **Testing / Distributable Builds**  
 - Usually done in a **normal** LabVIEW environment (Dev Mode disabled).  
 - Ensures that the `.vip` artifact or tests reflect a standard environment.
 
----
 
 <a name="available-github-actions"></a>
 ### 2. Available GitHub Actions
@@ -105,7 +93,6 @@ This document details how to automate **building**, **testing**, and **packaging
 3. **Run Unit Tests**  
    - Executes test scripts to validate your Icon Editor code in a stable environment.
 
----
 
 <a name="setting-up-a-self-hosted-runner"></a>
 ### 3. Setting Up a Self-Hosted Runner
@@ -126,7 +113,6 @@ This document details how to automate **building**, **testing**, and **packaging
 4. **Labels** (optional)  
    - If the workflow references `runs-on: [self-hosted, iconeditor]`, label your runner accordingly or update the YAML’s `runs-on` lines.
 
----
 
 <a name="running-the-actions-locally"></a>
 ### 4. Running the Actions Locally
@@ -149,7 +135,6 @@ With your runner online:
 5. **Review the `.vip`**  
    - Download from **Artifacts** or check your Release page if a release was created.
 
----
 
 <a name="example-developer-workflow"></a>
 ### 5. Example Developer Workflow
@@ -164,7 +149,6 @@ With your runner online:
 5. **Disable Dev Mode**: Return to a normal LabVIEW environment.  
 6. **Install & Verify**: Download the `.vip` artifact for final validations.
 
----
 
 ## 4. Next Steps
 
@@ -173,6 +157,5 @@ With your runner online:
 - **Submit Pull Requests**: If you refine scripts or fix issues, open a PR with logs showing your updated workflow runs.  
 - **Troubleshoot**: If manual environment edits are needed, consult `ManualSetup.md` or the original documentation for advanced configuration steps.
 
----
 
 **Happy Building!** By integrating these workflows, you’ll maintain a **robust, automated CI/CD** pipeline for the LabVIEW Icon Editor—complete with **semantic versioning**, **build artifact uploads**, and **GPG-signing** or **GPG-free** mode for forks.

@@ -1,6 +1,4 @@
-
-```markdown
-# **Getting Started Guide (Updated)**
+# **Getting Started Guide**
 
 This **Getting Started Guide** introduces a streamlined GitHub Action for **building and releasing** the **LabVIEW Icon Editor**. It automates versioning via **Pull Request labels**, assigns a **build number** based on total commits, optionally **attaches** the built `.vip` to a GitHub Release, and can **disable GPG** signing for forks. In this updated version, we also include sections on **troubleshooting** and an **FAQ** to help you maintain the workflow effectively.
 
