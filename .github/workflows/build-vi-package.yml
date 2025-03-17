@@ -5,22 +5,24 @@ on:
     branches:
       - main
       - develop
-      - release/*
+      - release-alpha/*
+      - release-beta/*
+      - release-rc/*
       - hotfix/*
   pull_request:
     branches:
       - main
       - develop
-      - release/*
+      - release-alpha/*
+      - release-beta/*
+      - release-rc/*
       - hotfix/*
   workflow_dispatch:
 
 env:
   DRAFT_RELEASE: true
   USE_AUTO_NOTES: true
-  # (R9) Disable GPG signing on forks (set to 'true' if you want the step to run)
   DISABLE_GPG_ON_FORKS: false
-  # (R5) Whether to attach the .vip to the release (set to 'true' if desired)
   ATTACH_ARTIFACTS_TO_RELEASE: true
 
 jobs:
@@ -50,7 +52,8 @@ jobs:
 
             git config --global commit.gpgsign false
             git config --global tag.gpgsign false
-          } else {
+          }
+          else {
             Write-Host "This is the official repo => no GPG changes."
             "old_commit_gpgsign=" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
             "old_tag_gpgsign="    | Out-File -FilePath $env:GITHUB_OUTPUT -Append
@@ -88,7 +91,6 @@ jobs:
               }
               core.setOutput('bump_type', bump);
             } else {
-              // For direct pushes, default to 'none'
               core.setOutput('bump_type', 'none');
             }
 
@@ -99,7 +101,7 @@ jobs:
         id: inc_build
         shell: pwsh
         run: |
-          git fetch --unshallow 2>$null || Write-Host "Already full clone."
+          git fetch --unshallow 2>$null || Write-Host "Already a full clone."
           $commitCount = git rev-list --count HEAD
           Write-Host "Commit-based build number => $commitCount"
           "new_build_number=$commitCount" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
@@ -108,103 +110,92 @@ jobs:
       # 4) Parse latest version tag, apply major/minor/patch if found
       ########################################################################
       - name: Compute version string
-      id: next_version
-      shell: pwsh
-      env:
-        BUMP_TYPE: ${{ steps.bump_type.outputs.bump_type }}
-        BUILD_NUMBER: ${{ steps.inc_build.outputs.new_build_number }}
-      run: |
-        Write-Host "Bump type: $($env:BUMP_TYPE)"
-        Write-Host "Build number: $($env:BUILD_NUMBER)"
-    
-        # 1) Find the last stable tag
-        #    If no tags found, default to v0.0.0
-        $latestTag = git describe --tags --abbrev=0 2>$null
-        if ([string]::IsNullOrEmpty($latestTag)) {
-          $baseMajor = 0
-          $baseMinor = 0
-          $basePatch = 0
-        }
-        else {
-          # e.g. if $latestTag is v1.2.3-build45, remove the prefix and any -build
-          $tagNoPrefix = $latestTag.TrimStart('v')
-          $versionPart = $tagNoPrefix -replace '-build.*',''
-          $baseMajor, $baseMinor, $basePatch = $versionPart.Split('.')
-        }
-    
-        $newMajor = [int]$baseMajor
-        $newMinor = [int]$baseMinor
-        $newPatch = [int]$basePatch
-    
-        # 2) Apply label-based semantic bump: major, minor, patch, or none
-        switch ($env:BUMP_TYPE) {
-          'major' {
-            $newMajor++
-            $newMinor = 0
-            $newPatch = 0
+        id: next_version
+        shell: pwsh
+        env:
+          BUMP_TYPE: ${{ steps.bump_type.outputs.bump_type }}
+          BUILD_NUMBER: ${{ steps.inc_build.outputs.new_build_number }}
+        run: |
+          Write-Host "Bump type: $($env:BUMP_TYPE)"
+          Write-Host "Build number: $($env:BUILD_NUMBER)"
+
+          # Grab branch ref (e.g. release-alpha/mybranch)
+          $branchRef = $env:GITHUB_REF -replace '^refs/heads/', ''
+          Write-Host "Full branchRef: $branchRef"
+
+          # 1) Find the last stable tag or fallback
+          $latestTag = git describe --tags --abbrev=0 2>$null
+          if ([string]::IsNullOrEmpty($latestTag)) {
+            $baseMajor = 0
+            $baseMinor = 0
+            $basePatch = 0
           }
-          'minor' {
-            $newMinor++
-            $newPatch = 0
+          else {
+            $tagNoPrefix = $latestTag.TrimStart('v')
+            $versionPart = $tagNoPrefix -replace '-build.*',''
+            $baseMajor, $baseMinor, $basePatch = $versionPart.Split('.')
           }
-          'patch' {
-            $newPatch++
+
+          $newMajor = [int]$baseMajor
+          $newMinor = [int]$baseMinor
+          $newPatch = [int]$basePatch
+
+          # 2) Apply label-based semantic bump
+          switch ($env:BUMP_TYPE) {
+            'major' {
+              $newMajor++
+              $newMinor = 0
+              $newPatch = 0
+            }
+            'minor' {
+              $newMinor++
+              $newPatch = 0
+            }
+            'patch' {
+              $newPatch++
+            }
+            'none' {
+              # do nothing
+            }
           }
-          'none' {
-            # do nothing; rely on build number only
+
+          # 3) Determine if alpha/beta/rc => generate pre-release suffix
+          $preSuffix = ""
+
+          if ($branchRef -like 'release-alpha/*') {
+            $countAlpha = git rev-list --count HEAD
+            if ([string]::IsNullOrEmpty($countAlpha)) { $countAlpha = 1 }
+            $preSuffix = "alpha.$countAlpha"
           }
-        }
-    
-        # 3) Check for ALPHA / BETA / RC suffix
-        #    We'll parse branch name to detect multiple channels.
-        $branchName = $env:GITHUB_REF -split '/' | Select-Object -Last 1
-        $preSuffix = ""
-    
-        # For example:
-        #   release-alpha/* => -alpha.<N>
-        #   release-beta/*  => -beta.<N>
-        #   release-rc/*    => -rc.<N>
-    
-        if ($branchName -like 'release-alpha/*') {
-          # Count commits or do something to produce alpha.<N>
-          $commitsCount = git rev-list --count HEAD 2>$null
-          if ([string]::IsNullOrEmpty($commitsCount)) { $commitsCount = 1 }
-          $preSuffix = "alpha.$commitsCount"
-        }
-        elseif ($branchName -like 'release-beta/*') {
-          $commitsCount = git rev-list --count HEAD 2>$null
-          if ([string]::IsNullOrEmpty($commitsCount)) { $commitsCount = 1 }
-          $preSuffix = "beta.$commitsCount"
-        }
-        elseif ($branchName -like 'release-rc/*') {
-          $commitsCount = git rev-list --count HEAD 2>$null
-          if ([string]::IsNullOrEmpty($commitsCount)) { $commitsCount = 1 }
-          $preSuffix = "rc.$commitsCount"
-        }
-        # If none of these, it's presumably a final release or a standard branch (main, develop, etc.)
-    
-        # 4) Construct final version
-        if ([string]::IsNullOrEmpty($preSuffix)) {
-          # final version
-          $version = "v$($newMajor).$($newMinor).$($newPatch)-build$($env:BUILD_NUMBER)"
-          $isPrerelease = "false"
-        }
-        else {
-          # pre-release
-          $version = "v$($newMajor).$($newMinor).$($newPatch)-$preSuffix-build$($env:BUILD_NUMBER)"
-          $isPrerelease = "true"
-        }
-    
-        Write-Host "Computed version => $version"
-        "VERSION=$version"         | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-        "IS_PRERELEASE=$isPrerelease" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-        "MAJOR=$newMajor"          | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-        "MINOR=$newMinor"          | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-        "PATCH=$newPatch"          | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-    
+          elseif ($branchRef -like 'release-beta/*') {
+            $countBeta = git rev-list --count HEAD
+            if ([string]::IsNullOrEmpty($countBeta)) { $countBeta = 1 }
+            $preSuffix = "beta.$countBeta"
+          }
+          elseif ($branchRef -like 'release-rc/*') {
+            $countRc = git rev-list --count HEAD
+            if ([string]::IsNullOrEmpty($countRc)) { $countRc = 1 }
+            $preSuffix = "rc.$countRc"
+          }
+
+          if ([string]::IsNullOrEmpty($preSuffix)) {
+            $version = "v$($newMajor).$($newMinor).$($newPatch)-build$($env:BUILD_NUMBER)"
+            $isPrerelease = "false"
+          }
+          else {
+            $version = "v$($newMajor).$($newMinor).$($newPatch)-$preSuffix-build$($env:BUILD_NUMBER)"
+            $isPrerelease = "true"
+          }
+
+          Write-Host "Computed version => $version"
+          "VERSION=$version"            | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "IS_PRERELEASE=$isPrerelease" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "MAJOR=$newMajor"            | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "MINOR=$newMinor"            | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "PATCH=$newPatch"            | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       ########################################################################
-      # 5) Build the icon editor VI package, passing correct param set
+      # 5) Build the icon editor VI package
       ########################################################################
       - name: Build the icon editor VI package
         shell: pwsh
@@ -229,10 +220,8 @@ jobs:
             -Build               $env:BUILD `
             -Commit              $env:COMMIT
 
-          # The .vip file is now in builds/VI Package/*.vip
-
       ########################################################################
-      # 6) Capture the .vip file path as a step output => source of truth
+      # 6) Capture the .vip file path as a step output
       ########################################################################
       - name: Discover .vip path
         id: find_vip
@@ -269,7 +258,7 @@ jobs:
           git push origin $VERSION
 
       ########################################################################
-      # 9) Create GitHub Release
+      # 9) Create GitHub Release (capture release_id)
       ########################################################################
       - name: Create GitHub Release
         if: ${{ success() && github.event_name != 'pull_request' }}
@@ -281,13 +270,15 @@ jobs:
             const versionTag = '${{ steps.next_version.outputs.VERSION }}';
             const draftRelease = (process.env.DRAFT_RELEASE || 'true').toLowerCase() === 'true';
             const useAutoNotes = (process.env.USE_AUTO_NOTES || 'true').toLowerCase() === 'true';
+            const isPrerelease = (('${{ steps.next_version.outputs.IS_PRERELEASE }}' || '').toLowerCase() === 'true');
 
             const createParams = {
               owner: context.repo.owner,
               repo: context.repo.repo,
               tag_name: versionTag,
               name: versionTag,
-              draft: draftRelease
+              draft: draftRelease,
+              prerelease: isPrerelease
             };
 
             if (useAutoNotes) {
@@ -298,43 +289,90 @@ jobs:
 
             const response = await github.rest.repos.createRelease(createParams);
             core.setOutput("upload_url", response.data.upload_url);
-            core.info(`Created release [draft=${draftRelease}] => ${versionTag}`);
+            core.setOutput("release_id", response.data.id);
+
+            core.info(
+              `Created release [draft=${draftRelease}, prerelease=${isPrerelease}] => ${versionTag}`
+            );
 
       ########################################################################
-      # 10) Attach ephemeral .vip to Release (if ATTACH_ARTIFACTS_TO_RELEASE==true)
+      # 10) Attach .vip file(s) to Release using github-script
       ########################################################################
-      - name: Attach .vip to Release
+      - name: Attach .vip file(s) to Release
         if: ${{ success() && env.ATTACH_ARTIFACTS_TO_RELEASE == 'true' && github.event_name != 'pull_request' }}
-        shell: pwsh
-        run: |
-          $vipPath = '${{ steps.find_vip.outputs.vip_path }}'
-          if (-not (Test-Path $vipPath)) {
-            Write-Warning "VIP file not found at $vipPath"
-            exit 0
-          }
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = require('path');
 
-          $uploadUrl = '${{ steps.create_release.outputs.upload_url }}'
-          if (-not $uploadUrl) {
-            Write-Warning "No upload_url from create_release step."
-            exit 0
-          }
+            // The numeric release ID from "Create GitHub Release" step
+            const releaseId = '${{ steps.create_release.outputs.release_id }}';
+            if (!releaseId) {
+              core.warning("No release_id found; skipping attach.");
+              return;
+            }
 
-          $uploadUrlClean = $uploadUrl.Split('{')[0]
-          $fileName = [System.IO.Path]::GetFileName($vipPath)
-          $uri = "$uploadUrlClean?name=$fileName"
+            // If you only want to attach the single .vip discovered in step #6:
+            // ---------------------------------------------------------------
+            // const vipFilePath = '${{ steps.find_vip.outputs.vip_path }}';
+            // if (!vipFilePath) {
+            //   core.warning("No .vip file path found; skipping attach.");
+            //   return;
+            // }
+            // const fileData = fs.readFileSync(vipFilePath);
+            // const fileName = path.basename(vipFilePath);
+            // await github.rest.repos.uploadReleaseAsset({
+            //   owner: context.repo.owner,
+            //   repo: context.repo.repo,
+            //   release_id: parseInt(releaseId, 10),
+            //   name: fileName,
+            //   data: fileData,
+            //   headers: {
+            //     'content-type': 'application/octet-stream',
+            //     'content-length': fileData.length
+            //   }
+            // });
+            // core.info(`Uploaded single file: ${fileName}`);
 
-          Write-Host "Attaching $vipPath => $uri"
+            // Or, to loop over ALL *.vip in "builds/VI Package" for multiple attachments:
+            // --------------------------------------------------------------------------
+            const vipDir = path.join(process.env.GITHUB_WORKSPACE, 'builds', 'VI Package');
+            let vipFiles = [];
+            try {
+              vipFiles = fs.readdirSync(vipDir).filter(f => f.toLowerCase().endsWith('.vip'));
+            } catch (err) {
+              core.warning(`Could not read directory 'builds/VI Package': ${err.message}`);
+              return;
+            }
 
-          $headers = @{
-            "Authorization" = "Bearer $env:GITHUB_TOKEN"
-            "Content-Type"  = "application/octet-stream"
-          }
+            if (!vipFiles.length) {
+              core.warning("No .vip files found to attach.");
+              return;
+            }
 
-          Invoke-RestMethod `
-            -Uri $uri `
-            -Method POST `
-            -Headers $headers `
-            -InFile $vipPath
+            core.info(`Discovered .vip files: ${vipFiles.join(', ')}`);
+
+            for (const vipFile of vipFiles) {
+              const fullPath = path.join(vipDir, vipFile);
+              const fileData = fs.readFileSync(fullPath);
+
+              core.info(`Uploading '${vipFile}' to release #${releaseId}...`);
+
+              await github.rest.repos.uploadReleaseAsset({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: parseInt(releaseId, 10),
+                name: vipFile,
+                data: fileData,
+                headers: {
+                  'content-type': 'application/octet-stream',
+                  'content-length': fileData.length
+                }
+              });
+              core.info(`Successfully attached '${vipFile}'!`);
+            }
 
       ########################################################################
       # B) Re-enable GPG signing if it was disabled
@@ -359,6 +397,7 @@ jobs:
             } else {
               git config --global --unset tag.gpgsign || Write-Host "tag.gpgsign wasn't originally set."
             }
-          } else {
+          }
+          else {
             Write-Host "Official repo or DISABLE_GPG_ON_FORKS==false => no restore needed."
           }
