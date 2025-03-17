@@ -32,9 +32,6 @@ jobs:
       pull-requests: read
 
     steps:
-      ########################################################################
-      # A) Possibly disable GPG signing on forks
-      ########################################################################
       - name: Possibly disable GPG signing on forks
         if: ${{ env.DISABLE_GPG_ON_FORKS == 'true' }}
         id: disable_signing
