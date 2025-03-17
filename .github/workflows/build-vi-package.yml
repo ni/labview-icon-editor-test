@@ -25,7 +25,6 @@ env:
 
 jobs:
   build-release:
-    # Requires a self-hosted runner with the "iconeditor" label
     runs-on: [self-hosted, iconeditor]
     permissions:
       contents: write
