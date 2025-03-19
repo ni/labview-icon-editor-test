@@ -1,78 +1,80 @@
-# LabVIEW Icon Editor  
-[![Build VI Package](https://github.com/ni/labview-icon-editor/actions/workflows/build-vi-package.yml/badge.svg)](https://github.com/ni/labview-icon-editor/actions/workflows/build-vi-package.yml)  
-> **Latest Pull Request:** [GitHub Action to Build and Release the Icon Editor](https://github.com/ni/labview-icon-editor/pull/158)
+# Icon Editor for LabVIEW #
+
+This repo contains the source files and automated build tools for the LabVIEW icon editor.
+You can use this code as a starting point for creating a custom icon editor. Refer to the [CONTRIBUTING](CONTRIBUTING.md) document for information about submitting changes for inclusion with future versions of LabVIEW.
+
+## Compatible LabVIEW Versions
+
+LabVIEW source is saved in 21.0 (__LabVIEW 2021__) format. Either LabVIEW 2021 or LabVIEW 2024 can be used to do development work.
+
+To build using the automated build process,  ensure you have LabVIEW 2021 *both 32 and 64 bits* installed, latest VIPM, and apply the dependencies located on *Tooling\deployment\Dependencies.vipc* to both LabVIEW versions.
+
+## Editing Guide 
+
+Because the icon editor is part of the LabVIEW development environment, you need to make changes to installed files before editing this project. There is an manual process, and an automated process made following it for ease of use.
+
+### Automated process 
+
+Before following this process, create a backup of the following files and folder:
+   - \<LabVIEW\>\\resource\\plugins\\lv_icon.lvlibp 
+   - \<LabVIEW\>\\vi.lib\\LabVIEW Icon API\\*
+
+After cloning the repo into a development location, and applying the dependencies located on *Tooling\deployment\Dependencies.vipc* to LabVIEW 2021 32 and 64 bits, follow this process to use the automation layer.
+
+1. Open Powershell in *Admin* mode and navigate to *.pipeline\scripts* from your github repo.
+2. Modify the following command to point to your github repo and run it: *.\DevelopmentMode.ps1 -RelativePath "C:\labview-icon-editor"*
+3. Open lv_icon_editor.lvproj in LabVIEW.
+4. The top-level VI is in the Project Explorer at __My Computer &#x00BB; resource/plugins &#x00BB; lv_icon.lvlib &#x00BB; lv_icon.vi__.
+
+### Manual process  
+
+Complete the following steps to edit this project:
+1. Clone this repo into a development location (e.g., C:\dev).
+2. Run __Tooling\Prepare LV to Use Icon Editor Source.vi__.
+This will perform the following steps, which you can alternatively perform manually:
+   * Delete \<LabVIEW\>\\resource\\plugins\\lv_icon.lvlipb
+   * Delete \<LabVIEW\>\\vi.lib\\LabVIEW Icon API
+   * Set LocalHost.LibraryPaths in your labview.ini file to the location of this project. For example:*
+       *   LocalHost.LibraryPaths="C:\\dev\\labview-icon-editor"
+3. Open lv_icon_editor.lvproj in LabVIEW.
+4. The top-level VI is in the Project Explorer at __My Computer &#x00BB; resource/plugins &#x00BB; lv_icon.lvlib &#x00BB; lv_icon.vi__.
+
+## Distribution Guide
+
+Complete the following steps to distribute your custom icon editor to another machine.
+
+### Automated process 
+
+This automated build process will follow these steps: 
+
+1. Apply the dependencies
+2. Run the unit test, 
+build the icon editor packed project library
+
+1. Open powershell in *Admin* mode and navigate to *.pipeline\scripts* from your github repo.
+2. Modify the following command to point to your github repo and run it: *.\build.ps1 -RelativePath "C:\labview-icon-editor"*
+3. A VI package named *ni_icon_editor-x.x.x.x* will be built on *builds\VI Package*.
+4. You can now install this VI package on any LabVIEW version after 2020. 
+
+*NOTE: The VI package makes no backup of your current lv_icon.lvlibp because the VI Package itself contains a zip file with all combinations of lv_icon.lvlibp for all LabVIEW versions and bitnesses, which gets deployed to your LabVIEW application files on uninstall. This ensures that a user doesnt get locked out of his icon editor and having to copy it from another LabVIEW installation if somehow he deletes the backup he did manually.*
+
+### Manual process  
+
+First, build the __Editor Packed Library__ build specification in the project to create __lv_icon.lvlibp__.
+
+Then, on the machine where you want to install your custom icon editor:
+1. Rename __\<LabVIEW\>\\resource\\plugins\\lv_icon.lvlibp__, the shipping icon editor, to __lv_icon.lvlibp.ship__ to "hide" it.
+2. Archive __\<LabVIEW\>\\vi.lib\\LabVIEW Icon API__ to preserve the shipping copy.  Use your archive program of choice (e.g. 7-Zip).
+3. Copy the packed library and support files that you developed with this project into the \<LabVIEW\> directory:  
+   - \<LabVIEW\>\\resource\\plugins\\lv_icon.lvlibp 
+   - \<LabVIEW\>\\vi.lib\\LabVIEW Icon API\\*
+
+## CI using an Azure DevOps pipeline
+
+An Azure Devops pipeline is used as an additional check to approve pull requests from *feature* to *development* branches. This pipeline runs the unit tests, builds the packed project libraries for both 32 and 64 bit LabVIEW, and builds the VI Package.
+
+## CI using github actions
+
+An example of a github action that can manually trigger a CI/CD workflow is located at "C:\labview-icon-editor\.github\workflows\Build VI packages.yml"
 
 
-
-## Overview
-This repository hosts the source for the **LabVIEW Icon Editor**. It includes PowerShell tooling to streamline CI/CD and packaging, plus reference workflows for **GitHub Actions** and **self-hosted runners**. Our goal is to collaborate with fellow software engineers to evolve and improve this solution.
-
-
-
-## Key Components
-1. **Source Files**  
-   Source code for customizing and extending the Icon Editor.
-
-2. **PowerShell Automation**  
-   - Built on [G-CLI](https://github.com/G-CLI/G-CLI)  
-   - Handles packaging and distribution tasks  
-   - Can be easily integrated into existing DevOps pipelines
-
-3. **GitHub Actions using PowerShell Automation**  
-   - [Development Mode Toggle](https://github.com/ni/labview-icon-editor/actions/workflows/development-mode-toggle.yml)  
-   - [Build VI Package](https://github.com/ni/labview-icon-editor/actions/workflows/build-vi-package.yml)  
-   - [Run Unit Tests](https://github.com/ni/labview-icon-editor/actions/workflows/run-unit-tests.yml)
-
-
-
-## How developing a feature looks like
-1. **Clone or Fork** this repo.  
-2. Review the [**CONTRIBUTING**](CONTRIBUTING.md) guidelines to find out how to get assigned to an issue.
-3. Pick 1 workflow:
-   1. [Manual](./docs/manual-instructions.md)
-   2. [Powershell Tools](./docs/powershell-cli-github-action-instructions.md)
-   3. [PowerShell Tools on Self-Hosted Runner](docs/powershell-cli-github-action-instructions.md) 
-4. [Enable Development Mode](docs/actions/development-mode-toggle.md) **or** follow the steps to [Edit the source manually](./docs/manual-setup.md)
-5. Develop the feature on your fork. The way you test your changes will depend on the workflow you chose.
-6. Submit a pull request to the feature branch.
-7. The *Technical Steering Commitee* and *Open Source Program Manager* will review the pull request.
-
-   **Technical Steering Committee:**
-      - [@JayKayAce](https://github.com/JayKayAce)
-      - [@crossrulz](https://github.com/crossrulz)
-      - [@neilpate](https://github.com/neilpate)
-      - [@j-medland](https://github.com/j-medland)
-      - @markballa
-      - [@RobustoSystems](https://github.com/RobustoSystems)
-
-   **NI Open Source Program Manager:**
-      - [@svelderrainruiz](https://github.com/svelderrainruiz) -   sergio.velderrain@emerson.com
-     
-8. Once approved, your change will be merged to the develop branch automatically.
-
->  **Thats it! your feature or bugfix (combined with many others!!) will follow the [GitFlow model](https://nvie.com/posts/a-successful-git-branching-model/) and a test plan maintained by NI and the LabVIEW Community will be executed before merging into main.** 
-
-## Documentation
-
-- **[Build VI Package](docs/ci/actions/build-vi-package.md)**
-   This document is designed to help maintainers, contributors, and engineers automate the release process for LabVIEW-based projects.
-
-- **[Development Mode Toggle](docs/ci/actions/development-mode-toggle.md)**
-   Explains how to use and customize the **Development Mode Toggle** workflow, which lets you enable or disable a “development mode” on a self-hosted GitHub Actions runner.
-   
-- **[Multichannel Release Workflow](docs/ci/actions/multichannel-release-workflow.md)**
-   This guide focuses on the **release workflow**, specifically how we handle **multiple pre-release channels** (Alpha, Beta, RC) in addition to final versions.
-
-- **[Runner Setup Guide](docs/ci/actions/runner-setup-guide.md)**
-   Explains how to locally set up and run the **LabVIEW Icon Editor** workflows on a **self-hosted runner** using **GitHub Actions**.
-
-- **[Troubleshooting & FAQ](docs/ci/troubleshooting-faq.md)**
-provides a collection of common **troubleshooting** scenarios (with solutions) and a **FAQ** (Frequently Asked Questions) for the LabVIEW Icon Editor GitHub Actions workflows.
-
-## Contributing
-- **[CONTRIBUTING](CONTRIBUTING.md)** – Guidelines for submitting patches, feature requests, and bug fixes.  
-- **[LICENSE](LICENSE)** – Details on how this project is licensed.
-
-
-### Thank You!
-Your contributions help us refine and extend the Icon Editor’s capabilities. We appreciate your collaboration and look forward to your ideas, feedback, and pull requests.
